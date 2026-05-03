@@ -20,10 +20,13 @@
     .rides-panel{width:320px;min-width:280px;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;flex-shrink:0}
     .rides-panel-header{padding:10px 14px;background:#ebf8ff;border-bottom:1px solid #bee3f8;font-weight:700;font-size:.85rem;display:flex;justify-content:space-between;align-items:center}
     .rides-list{flex:1;overflow-y:auto;padding:8px}
-    .ride-card{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:grab;font-size:.8rem;user-select:none;transition:box-shadow .15s}
-    .ride-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
-    .ride-card.dragging{opacity:.4;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+    .ride-card{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:grab;font-size:.8rem;user-select:none;transition:box-shadow .15s,border-color .1s,background .1s}
+    .ride-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12);border-color:#90cdf4}
+    .ride-card.selected{background:#ebf8ff;border-color:#3182ce;box-shadow:0 0 0 2px rgba(49,130,206,.25)}
+    .ride-card.selected:hover{box-shadow:0 0 0 2px rgba(49,130,206,.35)}
+    .ride-card.dragging{opacity:.4}
     .ride-card.assigned{background:#d1fae5;border-color:#6ee7b7;cursor:default;opacity:.7}
+    .sel-hint{font-size:.72rem;color:#3182ce;font-weight:600;padding:2px 0}
     .ride-card .ride-route{font-weight:700;color:#2d3748}
     .ride-card .ride-meta{color:#718096;margin-top:2px}
 
@@ -112,7 +115,10 @@
 <div id="page-dispatch" class="page active">
   <div class="rides-panel">
     <div class="rides-panel-header">
-      Pending Rides
+      <div>
+        Pending Rides
+        <div class="sel-hint" id="sel-hint" style="display:none"></div>
+      </div>
       <button class="refresh-btn" onclick="loadPendingRides()">↻</button>
     </div>
     <div class="rides-list" id="rides-list"></div>
@@ -219,10 +225,11 @@
 
 <script>
 const API = '';
-// trip_id → box_id mapping for drag state
-const boxAssignments = {};   // box_id → Set of trip_ids
+const boxAssignments = {};       // box_id → Set of trip_ids
 let pendingRides = [];
-let boxConfig = [];          // [{id, title, type, region, supplier_id}]
+let boxConfig = [];              // [{id, title, type, region, supplier_id}]
+const selectedIds = new Set();   // currently selected ride IDs
+let lastClickedId = null;        // for Shift+click range selection
 
 // ─── Page / Tab navigation ─────────────────────────────────────────────────
 function showPage(name, btn) {
@@ -246,6 +253,9 @@ function showTab(tabId, btn) {
 async function loadPendingRides() {
   const trips = await fetch(API + '/api/trips/').then(r => r.json()).catch(() => []);
   pendingRides = trips.filter(t => ['open','unassigned'].includes(t.status));
+  selectedIds.clear();
+  lastClickedId = null;
+  updateSelHint();
   const el = document.getElementById('rides-list');
   if (!pendingRides.length) {
     el.innerHTML = '<p style="color:#718096;font-size:.8rem;padding:8px">No pending rides</p>';
@@ -254,17 +264,103 @@ async function loadPendingRides() {
   el.innerHTML = pendingRides.map(t => {
     const assigned = Object.values(boxAssignments).some(s => s.has(t.id));
     return `<div class="ride-card${assigned?' assigned':''}" id="ride-${t.id}"
-      draggable="${!assigned}" ondragstart="dragStart(event,${t.id})">
+      draggable="${!assigned}"
+      onclick="selectCard(event,${t.id})"
+      ondragstart="dragStart(event,${t.id})">
       <div class="ride-route">#${t.id} ${t.pickup_city} → ${t.dropoff_city}</div>
       <div class="ride-meta">${fmtDate(t.pickup_time)} · ${t.num_passengers} pax · ${t.vehicle_type.replace('_',' ')}</div>
     </div>`;
   }).join('');
+
+  // Click on empty list area clears selection
+  el.onclick = e => { if (e.target === el) clearSelection(); };
+}
+
+function selectCard(e, tripId) {
+  const card = document.getElementById('ride-' + tripId);
+  if (!card || card.classList.contains('assigned')) return;
+
+  if (e.shiftKey && lastClickedId !== null) {
+    // Range select: select all cards between lastClickedId and tripId
+    const ids = pendingRides
+      .filter(t => !Object.values(boxAssignments).some(s => s.has(t.id)))
+      .map(t => t.id);
+    const a = ids.indexOf(lastClickedId), b = ids.indexOf(tripId);
+    if (a !== -1 && b !== -1) {
+      const [lo, hi] = a < b ? [a, b] : [b, a];
+      ids.slice(lo, hi + 1).forEach(id => {
+        selectedIds.add(id);
+        document.getElementById('ride-' + id)?.classList.add('selected');
+      });
+    }
+  } else if (e.ctrlKey || e.metaKey) {
+    // Toggle individual
+    if (selectedIds.has(tripId)) {
+      selectedIds.delete(tripId);
+      card.classList.remove('selected');
+    } else {
+      selectedIds.add(tripId);
+      card.classList.add('selected');
+    }
+    lastClickedId = tripId;
+  } else {
+    // Plain click — select only this one
+    clearSelection();
+    selectedIds.add(tripId);
+    card.classList.add('selected');
+    lastClickedId = tripId;
+  }
+  updateSelHint();
+}
+
+function clearSelection() {
+  selectedIds.forEach(id => document.getElementById('ride-' + id)?.classList.remove('selected'));
+  selectedIds.clear();
+  lastClickedId = null;
+  updateSelHint();
+}
+
+function updateSelHint() {
+  const hint = document.getElementById('sel-hint');
+  if (!hint) return;
+  if (selectedIds.size === 0) {
+    hint.style.display = 'none';
+  } else {
+    hint.style.display = 'block';
+    hint.textContent = `${selectedIds.size} selected — drag to a box`;
+  }
 }
 
 function dragStart(e, tripId) {
-  e.dataTransfer.setData('tripId', tripId);
-  document.getElementById('ride-' + tripId).classList.add('dragging');
-  setTimeout(() => document.getElementById('ride-' + tripId)?.classList.remove('dragging'), 0);
+  const card = document.getElementById('ride-' + tripId);
+  if (!card || card.classList.contains('assigned')) { e.preventDefault(); return; }
+
+  // If dragging an unselected card, make it the sole selection
+  if (!selectedIds.has(tripId)) {
+    clearSelection();
+    selectedIds.add(tripId);
+    card.classList.add('selected');
+    lastClickedId = tripId;
+    updateSelHint();
+  }
+
+  const ids = [...selectedIds];
+  e.dataTransfer.setData('tripIds', JSON.stringify(ids));
+  e.dataTransfer.effectAllowed = 'move';
+
+  // Ghost: show count badge instead of default card image
+  const ghost = document.createElement('div');
+  ghost.style.cssText = 'position:fixed;top:-200px;left:-200px;background:#3182ce;color:#fff;'
+    + 'padding:6px 14px;border-radius:20px;font-size:.82rem;font-weight:700;white-space:nowrap';
+  ghost.textContent = ids.length === 1
+    ? `Ride #${ids[0]}`
+    : `${ids.length} rides`;
+  document.body.appendChild(ghost);
+  e.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, 16);
+  setTimeout(() => ghost.remove(), 0);
+
+  ids.forEach(id => document.getElementById('ride-' + id)?.classList.add('dragging'));
+  setTimeout(() => ids.forEach(id => document.getElementById('ride-' + id)?.classList.remove('dragging')), 0);
 }
 
 // ─── Dispatch: boxes ────────────────────────────────────────────────────────
@@ -318,18 +414,33 @@ function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
 function drop(e, boxId) {
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
-  const tripId = parseInt(e.dataTransfer.getData('tripId'));
-  if (!tripId) return;
-  // Remove from any other box
-  Object.values(boxAssignments).forEach(s => s.delete(tripId));
-  document.querySelectorAll('.box-ride-chip[data-trip="' + tripId + '"]').forEach(el => el.remove());
+  let ids;
+  try { ids = JSON.parse(e.dataTransfer.getData('tripIds')); } catch { ids = []; }
+  if (!ids.length) return;
+
   if (!boxAssignments[boxId]) boxAssignments[boxId] = new Set();
-  boxAssignments[boxId].add(tripId);
-  addChipToBox(boxId, tripId);
+
+  ids.forEach(tripId => {
+    // Remove from any other box
+    Object.keys(boxAssignments).forEach(bid => {
+      if (bid !== boxId) {
+        boxAssignments[bid].delete(tripId);
+        document.querySelectorAll(`.box-ride-chip[data-trip="${tripId}"]`).forEach(el => el.remove());
+        updateSendBtn(bid);
+      }
+    });
+    if (!boxAssignments[boxId].has(tripId)) {
+      boxAssignments[boxId].add(tripId);
+      addChipToBox(boxId, tripId);
+    }
+    const card = document.getElementById('ride-' + tripId);
+    if (card) { card.classList.add('assigned'); card.classList.remove('selected'); card.setAttribute('draggable', 'false'); }
+  });
+
+  selectedIds.clear();
+  lastClickedId = null;
+  updateSelHint();
   updateSendBtn(boxId);
-  // Mark card as assigned
-  const card = document.getElementById('ride-' + tripId);
-  if (card) { card.classList.add('assigned'); card.setAttribute('draggable', 'false'); }
 }
 
 function addChipToBox(boxId, tripId) {
@@ -348,7 +459,9 @@ function removeFromBox(boxId, tripId) {
   document.querySelectorAll(`.box-ride-chip[data-trip="${tripId}"]`).forEach(el => el.remove());
   updateSendBtn(boxId);
   const card = document.getElementById('ride-' + tripId);
-  if (card) { card.classList.remove('assigned'); card.setAttribute('draggable', 'true'); }
+  if (card) { card.classList.remove('assigned', 'selected'); card.setAttribute('draggable', 'true'); }
+  selectedIds.delete(tripId);
+  updateSelHint();
 }
 
 function updateSendBtn(boxId) {
