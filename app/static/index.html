@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dispatch Dashboard</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,sans-serif;background:#f0f4f8;color:#1a202c}
+    header{background:#1a365d;color:#fff;padding:16px 24px;display:flex;align-items:center;gap:16px}
+    header h1{font-size:1.25rem;font-weight:700}
+    .badge{background:#3182ce;color:#fff;border-radius:12px;padding:2px 10px;font-size:.75rem}
+    nav{display:flex;gap:0;background:#2a4a7f}
+    nav button{background:none;border:none;color:#bee3f8;padding:12px 20px;cursor:pointer;font-size:.9rem;border-bottom:3px solid transparent}
+    nav button.active{color:#fff;border-bottom-color:#63b3ed}
+    .page{display:none;padding:24px}
+    .page.active{display:block}
+    .card{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);margin-bottom:16px;overflow:hidden}
+    .card-header{padding:12px 16px;background:#ebf8ff;border-bottom:1px solid #bee3f8;display:flex;justify-content:space-between;align-items:center}
+    .card-body{padding:16px}
+    table{width:100%;border-collapse:collapse;font-size:.875rem}
+    th{text-align:left;padding:8px 12px;background:#f7fafc;border-bottom:2px solid #e2e8f0;color:#4a5568;font-weight:600}
+    td{padding:8px 12px;border-bottom:1px solid #e2e8f0}
+    tr:hover td{background:#f7fafc}
+    .status{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600;text-transform:uppercase}
+    .status-open{background:#fef3c7;color:#92400e}
+    .status-offered{background:#dbeafe;color:#1e40af}
+    .status-confirmed{background:#d1fae5;color:#065f46}
+    .status-unassigned{background:#fee2e2;color:#991b1b}
+    .status-completed{background:#e0e7ff;color:#3730a3}
+    .status-cancelled{background:#f3f4f6;color:#6b7280}
+    .offer-row{font-size:.8rem;color:#4a5568;padding:4px 0;border-bottom:1px dashed #e2e8f0}
+    .offer-row:last-child{border:none}
+    .intent-yes{color:#065f46;font-weight:700}
+    .intent-no{color:#991b1b;font-weight:700}
+    .intent-ambiguous{color:#92400e;font-weight:700}
+    .btn{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600}
+    .btn-danger{background:#fc8181;color:#fff}
+    .btn-primary{background:#3182ce;color:#fff}
+    .btn-success{background:#48bb78;color:#fff}
+    .btn-sm{padding:4px 10px;font-size:.75rem}
+    input,select{padding:8px 12px;border:1px solid #cbd5e0;border-radius:6px;font-size:.875rem;width:100%}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .form-group{display:flex;flex-direction:column;gap:4px}
+    .form-group label{font-size:.8rem;font-weight:600;color:#4a5568}
+    .form-group.full{grid-column:1/-1}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+    .stat{background:#fff;border-radius:8px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.1);text-align:center}
+    .stat-num{font-size:2rem;font-weight:700;color:#2b6cb0}
+    .stat-label{font-size:.75rem;color:#718096;text-transform:uppercase;margin-top:4px}
+    .upload-zone{border:2px dashed #bee3f8;border-radius:8px;padding:32px;text-align:center;cursor:pointer;color:#3182ce}
+    .upload-zone:hover{background:#ebf8ff}
+    .toast{position:fixed;bottom:24px;right:24px;background:#2d3748;color:#fff;padding:12px 20px;border-radius:8px;font-size:.875rem;display:none;z-index:999}
+    .expand-btn{background:none;border:none;cursor:pointer;color:#3182ce;font-size:.8rem;padding:0 8px}
+    .offers-detail{display:none;margin-top:8px;padding:8px;background:#f7fafc;border-radius:6px}
+    .refresh-btn{background:#edf2f7;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:.8rem;color:#4a5568}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Dispatch Dashboard</h1>
+  <span class="badge" id="live-badge">LIVE</span>
+  <span style="margin-left:auto;font-size:.8rem;opacity:.7" id="last-refresh"></span>
+</header>
+<nav>
+  <button class="active" onclick="showPage('trips')">Active Trips</button>
+  <button onclick="showPage('drivers')">Drivers</button>
+  <button onclick="showPage('import')">Import Drivers</button>
+  <button onclick="showPage('new-trip')">New Trip</button>
+</nav>
+
+<!-- TRIPS PAGE -->
+<div id="page-trips" class="page active">
+  <div class="stats" id="stats-grid"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2 style="font-size:1rem;font-weight:700;color:#2d3748">Active & Recent Trips</h2>
+    <button class="refresh-btn" onclick="loadTrips()">Refresh</button>
+  </div>
+  <div id="trips-container"></div>
+</div>
+
+<!-- DRIVERS PAGE -->
+<div id="page-drivers" class="page">
+  <h2 style="font-size:1rem;font-weight:700;margin-bottom:12px">Driver Activity</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Name</th><th>Phone</th><th>City</th><th>Vehicle</th><th>Last Offer</th><th>Status</th><th>Active</th></tr></thead>
+      <tbody id="drivers-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- IMPORT PAGE -->
+<div id="page-import" class="page">
+  <div class="card" style="max-width:560px">
+    <div class="card-header"><strong>Import Drivers from Excel</strong></div>
+    <div class="card-body">
+      <p style="font-size:.875rem;color:#4a5568;margin-bottom:16px">
+        Download the <a href="/static/driver_template.xlsx" style="color:#3182ce">driver_template.xlsx</a>,
+        fill it in, and upload below.
+      </p>
+      <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        Click or drag &amp; drop your Excel file here
+        <input type="file" id="file-input" accept=".xlsx" style="display:none" onchange="uploadFile(this)"/>
+      </div>
+      <div id="import-result" style="margin-top:12px;font-size:.875rem"></div>
+    </div>
+  </div>
+</div>
+
+<!-- NEW TRIP PAGE -->
+<div id="page-new-trip" class="page">
+  <div class="card" style="max-width:640px">
+    <div class="card-header"><strong>Create New Trip</strong></div>
+    <div class="card-body">
+      <form onsubmit="createTrip(event)">
+        <div class="form-grid">
+          <div class="form-group"><label>Pickup Address</label><input name="pickup_address" required/></div>
+          <div class="form-group"><label>Pickup City</label><input name="pickup_city" required/></div>
+          <div class="form-group"><label>Dropoff Address</label><input name="dropoff_address" required/></div>
+          <div class="form-group"><label>Dropoff City</label><input name="dropoff_city" required/></div>
+          <div class="form-group"><label>Pickup Time</label><input name="pickup_time" type="datetime-local" required/></div>
+          <div class="form-group"><label>Passengers</label><input name="num_passengers" type="number" min="1" max="18" required/></div>
+          <div class="form-group">
+            <label>Vehicle Type</label>
+            <select name="vehicle_type">
+              <option value="sedan">Sedan (up to 4)</option>
+              <option value="executive_minivan">Executive Minivan (up to 6)</option>
+              <option value="minivan">Minivan (up to 7)</option>
+              <option value="minibus_15">Minibus 15</option>
+              <option value="minibus_18">Minibus 18</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Price to Driver (₪)</label><input name="price_to_driver" type="number" step="0.01"/></div>
+          <div class="form-group"><label>Region</label><input name="region"/></div>
+          <div class="form-group"><label>Booking ID (optional)</label><input name="external_booking_id"/></div>
+          <div class="form-group full"><label>Special Requirements</label><input name="special_requirements"/></div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top:16px;width:100%">Create &amp; Dispatch</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'trips') loadTrips();
+  if (name === 'drivers') loadDrivers();
+}
+
+function toast(msg, ok=true) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = ok ? '#276749' : '#c53030';
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+
+async function loadTrips() {
+  const [summary, active] = await Promise.all([
+    fetch(API + '/api/dashboard/summary').then(r => r.json()),
+    fetch(API + '/api/dashboard/active_trips').then(r => r.json()),
+  ]);
+
+  const counts = summary.trip_counts;
+  document.getElementById('stats-grid').innerHTML = [
+    ['Open', counts.open || 0, '#f6ad55'],
+    ['Offered', counts.offered || 0, '#63b3ed'],
+    ['Confirmed', counts.confirmed || 0, '#68d391'],
+    ['Unassigned', counts.unassigned || 0, '#fc8181'],
+    ['Completed', counts.completed || 0, '#a3bffa'],
+  ].map(([label, num, color]) =>
+    `<div class="stat"><div class="stat-num" style="color:${color}">${num}</div><div class="stat-label">${label}</div></div>`
+  ).join('');
+
+  document.getElementById('trips-container').innerHTML = active.map(({trip, offers}) => `
+    <div class="card">
+      <div class="card-header">
+        <span><strong>#${trip.id}</strong> ${trip.pickup_city} → ${trip.dropoff_city}
+          &nbsp;|&nbsp; ${fmtDate(trip.pickup_time)}
+          &nbsp;|&nbsp; ${trip.num_passengers} pax &nbsp;|&nbsp; ${trip.vehicle_type}
+          ${trip.price_to_driver ? `&nbsp;|&nbsp; ₪${trip.price_to_driver}` : ''}
+        </span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="status status-${trip.status}">${trip.status}</span>
+          ${trip.status === 'offered' ? `<button class="btn btn-danger btn-sm" onclick="override(${trip.id},'cancel_offer')">Cancel Offer</button>` : ''}
+          ${trip.status !== 'completed' && trip.status !== 'cancelled' ? `<button class="btn btn-success btn-sm" onclick="override(${trip.id},'mark_handled')">Mark Handled</button>` : ''}
+          <button class="expand-btn" onclick="toggleOffers(${trip.id})">▼ Offers (${offers.length})</button>
+        </div>
+      </div>
+      <div class="offers-detail" id="offers-${trip.id}">
+        ${offers.length === 0 ? '<em style="font-size:.8rem;color:#718096">No offers yet</em>' : offers.map(o => `
+          <div class="offer-row">
+            <strong>${o.driver_name}</strong> (${o.vehicle_type}) —
+            <span class="status status-${o.status}">${o.status}</span>
+            &nbsp; sent ${fmtDate(o.sent_at)}
+            ${o.reply ? `&nbsp;| Reply: "<em>${o.reply}</em>" → <span class="intent-${o.ai_intent}">${o.ai_intent}</span>` : ''}
+            ${o.rank_reason ? `<br><span style="color:#718096;font-size:.75rem">${o.rank_reason}</span>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>`).join('') || '<p style="color:#718096;text-align:center;padding:32px">No active trips</p>';
+
+  document.getElementById('last-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+function toggleOffers(id) {
+  const el = document.getElementById('offers-' + id);
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+
+async function loadDrivers() {
+  const data = await fetch(API + '/api/dashboard/drivers').then(r => r.json());
+  document.getElementById('drivers-tbody').innerHTML = data.map(d => `
+    <tr>
+      <td><strong>${d.name}</strong></td>
+      <td>${d.phone}</td>
+      <td>${d.home_city}</td>
+      <td>${d.vehicle_type}</td>
+      <td>${d.last_offer_at ? fmtDate(d.last_offer_at) : '—'}</td>
+      <td>${d.last_offer_status ? `<span class="status status-${d.last_offer_status}">${d.last_offer_status}</span>` : '—'}</td>
+      <td><span style="color:${d.active?'#276749':'#c53030'}">${d.active?'Yes':'No'}</span></td>
+    </tr>`).join('');
+}
+
+async function uploadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(API + '/api/drivers/import', {method: 'POST', body: fd});
+  const data = await res.json();
+  if (res.ok) {
+    document.getElementById('import-result').innerHTML =
+      `<span style="color:#276749">✓ Imported: ${data.created} created, ${data.updated} updated</span>`;
+    toast(`Imported ${data.created + data.updated} drivers`);
+  } else {
+    document.getElementById('import-result').innerHTML =
+      `<span style="color:#c53030">Error: ${data.detail}</span>`;
+    toast('Import failed', false);
+  }
+}
+
+async function createTrip(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const payload = Object.fromEntries(fd.entries());
+  if (!payload.external_booking_id) delete payload.external_booking_id;
+  if (!payload.price_to_driver) delete payload.price_to_driver;
+  if (!payload.special_requirements) payload.special_requirements = '';
+  if (!payload.region) payload.region = '';
+  payload.source = 'direct';
+  payload.num_passengers = parseInt(payload.num_passengers);
+  payload.pickup_time = new Date(payload.pickup_time).toISOString();
+
+  const res = await fetch(API + '/api/trips/ingest', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) {
+    toast('Trip created and dispatch started!');
+    e.target.reset();
+    showPage('trips');
+  } else {
+    const err = await res.json();
+    toast('Error: ' + (err.detail || 'Unknown'), false);
+  }
+}
+
+async function override(tripId, action, driverId=null) {
+  const body = {action};
+  if (driverId) body.driver_id = driverId;
+  const res = await fetch(API + `/api/trips/${tripId}/override`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  if (res.ok) { toast('Done'); loadTrips(); }
+  else toast('Failed', false);
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleString('en-GB', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+// Auto-refresh every 30 seconds
+loadTrips();
+setInterval(loadTrips, 30000);
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh-keygen -R github.com)",
+      "Bash(ssh-keyscan -t ed25519,rsa github.com)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(echo \"exit: $?\")"
+    ]
+  }
+}
