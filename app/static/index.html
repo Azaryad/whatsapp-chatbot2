@@ -81,14 +81,14 @@
     .tab-btn.active{background:#3182ce;color:#fff}
 
     /* ── IMPORT / SETTINGS PAGE ── */
-    #page-settings{overflow-y:auto;padding:16px}
-    .settings-section{max-width:540px;margin-bottom:24px}
-    .upload-zone{border:2px dashed #bee3f8;border-radius:8px;padding:24px;text-align:center;cursor:pointer;color:#3182ce;font-size:.85rem}
+    #page-settings{overflow-y:auto;padding:20px 24px}
+    .settings-section{margin-bottom:24px}
+    .upload-zone{border:2px dashed #bee3f8;border-radius:8px;padding:32px;text-align:center;cursor:pointer;color:#3182ce;font-size:.88rem}
     .upload-zone:hover{background:#ebf8ff}
-    input,select{padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.82rem;width:100%}
-    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .form-group{display:flex;flex-direction:column;gap:3px}
-    .form-group label{font-size:.75rem;font-weight:600;color:#4a5568}
+    input,select{padding:8px 12px;border:1px solid #cbd5e0;border-radius:6px;font-size:.85rem;width:100%}
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+    .form-group{display:flex;flex-direction:column;gap:4px}
+    .form-group label{font-size:.78rem;font-weight:600;color:#4a5568}
     .form-group.full{grid-column:1/-1}
     .btn{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600}
     .btn-primary{background:#3182ce;color:#fff}
@@ -160,7 +160,7 @@
 
 <!-- ═══════════════ SETTINGS PAGE ═══════════════ -->
 <div id="page-settings" class="page">
-  <div class="settings-section card" style="max-width:540px">
+  <div class="settings-section card" style="">
     <div class="card-header"><strong>Import Drivers (Excel)</strong></div>
     <div class="card-body">
       <p style="font-size:.82rem;color:#4a5568;margin-bottom:12px">
@@ -174,7 +174,7 @@
     </div>
   </div>
 
-  <div class="settings-section card" style="max-width:540px">
+  <div class="settings-section card" style="">
     <div class="card-header"><strong>Add Supplier</strong></div>
     <div class="card-body">
       <form onsubmit="addSupplier(event)">
@@ -190,7 +190,7 @@
     </div>
   </div>
 
-  <div class="settings-section card" style="max-width:540px">
+  <div class="settings-section card" style="">
     <div class="card-header"><strong>Create Test Trip</strong></div>
     <div class="card-body">
       <form onsubmit="createTrip(event)">
