@@ -6,112 +6,186 @@
   <title>Dispatch Dashboard</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:system-ui,sans-serif;background:#f0f4f8;color:#1a202c}
-    header{background:#1a365d;color:#fff;padding:16px 24px;display:flex;align-items:center;gap:16px}
-    header h1{font-size:1.25rem;font-weight:700}
-    .badge{background:#3182ce;color:#fff;border-radius:12px;padding:2px 10px;font-size:.75rem}
-    nav{display:flex;gap:0;background:#2a4a7f}
-    nav button{background:none;border:none;color:#bee3f8;padding:12px 20px;cursor:pointer;font-size:.9rem;border-bottom:3px solid transparent}
+    body{font-family:system-ui,sans-serif;background:#f0f4f8;color:#1a202c;height:100vh;display:flex;flex-direction:column}
+    header{background:#1a365d;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+    header h1{font-size:1.1rem;font-weight:700}
+    nav{display:flex;background:#2a4a7f;flex-shrink:0}
+    nav button{background:none;border:none;color:#bee3f8;padding:10px 18px;cursor:pointer;font-size:.85rem;border-bottom:3px solid transparent}
     nav button.active{color:#fff;border-bottom-color:#63b3ed}
-    .page{display:none;padding:24px}
-    .page.active{display:block}
-    .card{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);margin-bottom:16px;overflow:hidden}
-    .card-header{padding:12px 16px;background:#ebf8ff;border-bottom:1px solid #bee3f8;display:flex;justify-content:space-between;align-items:center}
-    .card-body{padding:16px}
-    table{width:100%;border-collapse:collapse;font-size:.875rem}
-    th{text-align:left;padding:8px 12px;background:#f7fafc;border-bottom:2px solid #e2e8f0;color:#4a5568;font-weight:600}
-    td{padding:8px 12px;border-bottom:1px solid #e2e8f0}
-    tr:hover td{background:#f7fafc}
-    .status{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600;text-transform:uppercase}
-    .status-open{background:#fef3c7;color:#92400e}
-    .status-offered{background:#dbeafe;color:#1e40af}
-    .status-confirmed{background:#d1fae5;color:#065f46}
-    .status-unassigned{background:#fee2e2;color:#991b1b}
-    .status-completed{background:#e0e7ff;color:#3730a3}
-    .status-cancelled{background:#f3f4f6;color:#6b7280}
-    .offer-row{font-size:.8rem;color:#4a5568;padding:4px 0;border-bottom:1px dashed #e2e8f0}
+    .page{display:none;flex:1;overflow:hidden}
+    .page.active{display:flex;flex-direction:column}
+
+    /* ── DISPATCH PAGE ── */
+    #page-dispatch{flex-direction:row;gap:0}
+    .rides-panel{width:320px;min-width:280px;background:#fff;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;flex-shrink:0}
+    .rides-panel-header{padding:10px 14px;background:#ebf8ff;border-bottom:1px solid #bee3f8;font-weight:700;font-size:.85rem;display:flex;justify-content:space-between;align-items:center}
+    .rides-list{flex:1;overflow-y:auto;padding:8px}
+    .ride-card{background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:grab;font-size:.8rem;user-select:none;transition:box-shadow .15s}
+    .ride-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.12)}
+    .ride-card.dragging{opacity:.4;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+    .ride-card.assigned{background:#d1fae5;border-color:#6ee7b7;cursor:default;opacity:.7}
+    .ride-card .ride-route{font-weight:700;color:#2d3748}
+    .ride-card .ride-meta{color:#718096;margin-top:2px}
+
+    .boxes-panel{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+    .dispatch-box{background:#fff;border:2px dashed #cbd5e0;border-radius:8px;min-height:100px;transition:border-color .15s,background .15s}
+    .dispatch-box.drag-over{border-color:#3182ce;background:#ebf8ff}
+    .dispatch-box .box-header{padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e2e8f0;background:#f7fafc;border-radius:6px 6px 0 0}
+    .dispatch-box .box-header .box-title{font-weight:700;font-size:.85rem}
+    .dispatch-box .box-header .box-type{font-size:.7rem;padding:2px 8px;border-radius:10px;font-weight:600}
+    .type-driver{background:#dbeafe;color:#1e40af}
+    .type-supplier{background:#fef3c7;color:#92400e}
+    .box-rides{padding:8px;min-height:60px;display:flex;flex-wrap:wrap;gap:6px}
+    .box-ride-chip{background:#ebf8ff;border:1px solid #bee3f8;border-radius:12px;padding:3px 10px;font-size:.75rem;display:flex;align-items:center;gap:6px}
+    .box-ride-chip .remove-chip{cursor:pointer;color:#718096;font-size:.9rem;line-height:1}
+    .box-ride-chip .remove-chip:hover{color:#e53e3e}
+    .box-footer{padding:6px 10px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end}
+    .btn-send{background:#3182ce;color:#fff;border:none;border-radius:6px;padding:5px 16px;font-size:.8rem;font-weight:600;cursor:pointer}
+    .btn-send:hover{background:#2b6cb0}
+    .btn-send:disabled{background:#a0aec0;cursor:default}
+
+    /* ── MONITORING PAGE ── */
+    #page-monitor{overflow-y:auto;padding:16px}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
+    .stat{background:#fff;border-radius:8px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.1);text-align:center}
+    .stat-num{font-size:1.8rem;font-weight:700}
+    .stat-label{font-size:.7rem;color:#718096;text-transform:uppercase;margin-top:2px}
+    .card{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);margin-bottom:12px;overflow:hidden}
+    .card-header{padding:10px 14px;background:#ebf8ff;border-bottom:1px solid #bee3f8;display:flex;justify-content:space-between;align-items:center;font-size:.85rem}
+    .card-body{padding:12px}
+    table{width:100%;border-collapse:collapse;font-size:.82rem}
+    th{text-align:left;padding:7px 10px;background:#f7fafc;border-bottom:2px solid #e2e8f0;color:#4a5568;font-weight:600}
+    td{padding:7px 10px;border-bottom:1px solid #e2e8f0}
+    .status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:700;text-transform:uppercase}
+    .s-open{background:#fef3c7;color:#92400e}
+    .s-offered{background:#dbeafe;color:#1e40af}
+    .s-pending_approval{background:#fed7aa;color:#c05621}
+    .s-confirmed{background:#d1fae5;color:#065f46}
+    .s-unassigned{background:#fee2e2;color:#991b1b}
+    .s-approval_timeout{background:#fecaca;color:#7f1d1d}
+    .s-completed{background:#e0e7ff;color:#3730a3}
+    .s-cancelled,.s-rejected,.s-timeout{background:#f3f4f6;color:#6b7280}
+    .expand-btn{background:none;border:none;cursor:pointer;color:#3182ce;font-size:.78rem;padding:0 6px}
+    .offers-detail{display:none;margin-top:8px;padding:8px;background:#f7fafc;border-radius:6px;font-size:.78rem}
+    .offer-row{padding:3px 0;border-bottom:1px dashed #e2e8f0}
     .offer-row:last-child{border:none}
-    .intent-yes{color:#065f46;font-weight:700}
-    .intent-no{color:#991b1b;font-weight:700}
-    .intent-ambiguous{color:#92400e;font-weight:700}
-    .btn{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600}
-    .btn-danger{background:#fc8181;color:#fff}
-    .btn-primary{background:#3182ce;color:#fff}
-    .btn-success{background:#48bb78;color:#fff}
-    .btn-sm{padding:4px 10px;font-size:.75rem}
-    input,select{padding:8px 12px;border:1px solid #cbd5e0;border-radius:6px;font-size:.875rem;width:100%}
-    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .form-group{display:flex;flex-direction:column;gap:4px}
-    .form-group label{font-size:.8rem;font-weight:600;color:#4a5568}
-    .form-group.full{grid-column:1/-1}
-    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
-    .stat{background:#fff;border-radius:8px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.1);text-align:center}
-    .stat-num{font-size:2rem;font-weight:700;color:#2b6cb0}
-    .stat-label{font-size:.75rem;color:#718096;text-transform:uppercase;margin-top:4px}
-    .upload-zone{border:2px dashed #bee3f8;border-radius:8px;padding:32px;text-align:center;cursor:pointer;color:#3182ce}
+    .refresh-btn{background:#edf2f7;border:none;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:.78rem;color:#4a5568}
+
+    /* ── DRIVERS/SUPPLIERS PAGE ── */
+    #page-people{overflow-y:auto;padding:16px}
+    .tabs{display:flex;gap:8px;margin-bottom:12px}
+    .tab-btn{background:#edf2f7;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600}
+    .tab-btn.active{background:#3182ce;color:#fff}
+
+    /* ── IMPORT / SETTINGS PAGE ── */
+    #page-settings{overflow-y:auto;padding:16px}
+    .settings-section{max-width:540px;margin-bottom:24px}
+    .upload-zone{border:2px dashed #bee3f8;border-radius:8px;padding:24px;text-align:center;cursor:pointer;color:#3182ce;font-size:.85rem}
     .upload-zone:hover{background:#ebf8ff}
-    .toast{position:fixed;bottom:24px;right:24px;background:#2d3748;color:#fff;padding:12px 20px;border-radius:8px;font-size:.875rem;display:none;z-index:999}
-    .expand-btn{background:none;border:none;cursor:pointer;color:#3182ce;font-size:.8rem;padding:0 8px}
-    .offers-detail{display:none;margin-top:8px;padding:8px;background:#f7fafc;border-radius:6px}
-    .refresh-btn{background:#edf2f7;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:.8rem;color:#4a5568}
+    input,select{padding:7px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.82rem;width:100%}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .form-group{display:flex;flex-direction:column;gap:3px}
+    .form-group label{font-size:.75rem;font-weight:600;color:#4a5568}
+    .form-group.full{grid-column:1/-1}
+    .btn{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:600}
+    .btn-primary{background:#3182ce;color:#fff}
+    .btn-danger{background:#fc8181;color:#fff}
+    .btn-success{background:#48bb78;color:#fff}
+
+    .toast{position:fixed;bottom:20px;right:20px;background:#2d3748;color:#fff;padding:10px 18px;border-radius:8px;font-size:.82rem;display:none;z-index:999}
+    .approval-warning{background:#fff7ed;border-left:4px solid #f6ad55;padding:6px 10px;font-size:.78rem;color:#7c3d12;margin-top:4px;border-radius:0 4px 4px 0}
   </style>
 </head>
 <body>
 <header>
   <h1>Dispatch Dashboard</h1>
-  <span class="badge" id="live-badge">LIVE</span>
-  <span style="margin-left:auto;font-size:.8rem;opacity:.7" id="last-refresh"></span>
+  <span style="margin-left:auto;font-size:.75rem;opacity:.7" id="last-refresh"></span>
 </header>
 <nav>
-  <button class="active" onclick="showPage('trips')">Active Trips</button>
-  <button onclick="showPage('drivers')">Drivers</button>
-  <button onclick="showPage('import')">Import Drivers</button>
-  <button onclick="showPage('new-trip')">New Trip</button>
+  <button class="active" onclick="showPage('dispatch',this)">Dispatch</button>
+  <button onclick="showPage('monitor',this)">Monitor</button>
+  <button onclick="showPage('people',this)">Drivers &amp; Suppliers</button>
+  <button onclick="showPage('settings',this)">Settings / Import</button>
 </nav>
 
-<!-- TRIPS PAGE -->
-<div id="page-trips" class="page active">
+<!-- ═══════════════ DISPATCH PAGE ═══════════════ -->
+<div id="page-dispatch" class="page active">
+  <div class="rides-panel">
+    <div class="rides-panel-header">
+      Pending Rides
+      <button class="refresh-btn" onclick="loadPendingRides()">↻</button>
+    </div>
+    <div class="rides-list" id="rides-list"></div>
+  </div>
+  <div class="boxes-panel" id="boxes-panel"></div>
+</div>
+
+<!-- ═══════════════ MONITOR PAGE ═══════════════ -->
+<div id="page-monitor" class="page">
   <div class="stats" id="stats-grid"></div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h2 style="font-size:1rem;font-weight:700;color:#2d3748">Active & Recent Trips</h2>
-    <button class="refresh-btn" onclick="loadTrips()">Refresh</button>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <strong style="font-size:.9rem">Active Trips</strong>
+    <button class="refresh-btn" onclick="loadMonitor()">↻ Refresh</button>
   </div>
-  <div id="trips-container"></div>
+  <div id="monitor-trips"></div>
 </div>
 
-<!-- DRIVERS PAGE -->
-<div id="page-drivers" class="page">
-  <h2 style="font-size:1rem;font-weight:700;margin-bottom:12px">Driver Activity</h2>
-  <div class="card">
-    <table>
-      <thead><tr><th>Name</th><th>Phone</th><th>City</th><th>Vehicle</th><th>Last Offer</th><th>Status</th><th>Active</th></tr></thead>
-      <tbody id="drivers-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- IMPORT PAGE -->
-<div id="page-import" class="page">
-  <div class="card" style="max-width:560px">
-    <div class="card-header"><strong>Import Drivers from Excel</strong></div>
-    <div class="card-body">
-      <p style="font-size:.875rem;color:#4a5568;margin-bottom:16px">
-        Download the <a href="/static/driver_template.xlsx" style="color:#3182ce">driver_template.xlsx</a>,
-        fill it in, and upload below.
-      </p>
-      <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
-        Click or drag &amp; drop your Excel file here
-        <input type="file" id="file-input" accept=".xlsx" style="display:none" onchange="uploadFile(this)"/>
-      </div>
-      <div id="import-result" style="margin-top:12px;font-size:.875rem"></div>
+<!-- ═══════════════ PEOPLE PAGE ═══════════════ -->
+<div id="page-people" class="page">
+  <div style="padding:16px">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('tab-drivers',this)">Drivers</button>
+      <button class="tab-btn" onclick="showTab('tab-suppliers',this)">Suppliers</button>
+    </div>
+    <div id="tab-drivers">
+      <div class="card"><table>
+        <thead><tr><th>Name</th><th>Phone</th><th>City</th><th>Region</th><th>Vehicle</th><th>Last Offer</th><th>Active</th></tr></thead>
+        <tbody id="drivers-tbody"></tbody>
+      </table></div>
+    </div>
+    <div id="tab-suppliers" style="display:none">
+      <div class="card"><table>
+        <thead><tr><th>Name</th><th>Code</th><th>Phone</th><th>Region</th><th>Active</th></tr></thead>
+        <tbody id="suppliers-tbody"></tbody>
+      </table></div>
     </div>
   </div>
 </div>
 
-<!-- NEW TRIP PAGE -->
-<div id="page-new-trip" class="page">
-  <div class="card" style="max-width:640px">
-    <div class="card-header"><strong>Create New Trip</strong></div>
+<!-- ═══════════════ SETTINGS PAGE ═══════════════ -->
+<div id="page-settings" class="page">
+  <div class="settings-section card" style="max-width:540px">
+    <div class="card-header"><strong>Import Drivers (Excel)</strong></div>
+    <div class="card-body">
+      <p style="font-size:.82rem;color:#4a5568;margin-bottom:12px">
+        Download <a href="/static/driver_template.xlsx" style="color:#3182ce">driver_template.xlsx</a>, fill in, upload.
+      </p>
+      <div class="upload-zone" onclick="document.getElementById('driver-file').click()">
+        Click or drag Excel file here
+        <input type="file" id="driver-file" accept=".xlsx" style="display:none" onchange="uploadDrivers(this)"/>
+      </div>
+      <div id="import-result" style="margin-top:8px;font-size:.82rem"></div>
+    </div>
+  </div>
+
+  <div class="settings-section card" style="max-width:540px">
+    <div class="card-header"><strong>Add Supplier</strong></div>
+    <div class="card-body">
+      <form onsubmit="addSupplier(event)">
+        <div class="form-grid">
+          <div class="form-group"><label>Code</label><input name="supplier_code" required/></div>
+          <div class="form-group"><label>Name</label><input name="name" required/></div>
+          <div class="form-group"><label>Phone</label><input name="phone" required/></div>
+          <div class="form-group"><label>Region</label><input name="region" required placeholder="e.g. Israel/Tel Aviv"/></div>
+          <div class="form-group full"><label>Notes</label><input name="notes"/></div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top:10px">Add Supplier</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="settings-section card" style="max-width:540px">
+    <div class="card-header"><strong>Create Test Trip</strong></div>
     <div class="card-body">
       <form onsubmit="createTrip(event)">
         <div class="form-grid">
@@ -124,19 +198,18 @@
           <div class="form-group">
             <label>Vehicle Type</label>
             <select name="vehicle_type">
-              <option value="sedan">Sedan (up to 4)</option>
-              <option value="executive_minivan">Executive Minivan (up to 6)</option>
-              <option value="minivan">Minivan (up to 7)</option>
+              <option value="sedan">Sedan (4)</option>
+              <option value="executive_minivan">Executive Minivan (6)</option>
+              <option value="minivan">Minivan (7)</option>
               <option value="minibus_15">Minibus 15</option>
               <option value="minibus_18">Minibus 18</option>
             </select>
           </div>
-          <div class="form-group"><label>Price to Driver (₪)</label><input name="price_to_driver" type="number" step="0.01"/></div>
-          <div class="form-group"><label>Region</label><input name="region"/></div>
-          <div class="form-group"><label>Booking ID (optional)</label><input name="external_booking_id"/></div>
-          <div class="form-group full"><label>Special Requirements</label><input name="special_requirements"/></div>
+          <div class="form-group"><label>Price ₪</label><input name="price_to_driver" type="number" step="0.01"/></div>
+          <div class="form-group"><label>Region</label><input name="region" placeholder="auto-detected if blank"/></div>
+          <div class="form-group"><label>Booking ID</label><input name="external_booking_id"/></div>
         </div>
-        <button type="submit" class="btn btn-primary" style="margin-top:16px;width:100%">Create &amp; Dispatch</button>
+        <button type="submit" class="btn btn-primary" style="margin-top:10px">Create Trip</button>
       </form>
     </div>
   </div>
@@ -146,67 +219,228 @@
 
 <script>
 const API = '';
+// trip_id → box_id mapping for drag state
+const boxAssignments = {};   // box_id → Set of trip_ids
+let pendingRides = [];
+let boxConfig = [];          // [{id, title, type, region, supplier_id}]
 
-function showPage(name) {
+// ─── Page / Tab navigation ─────────────────────────────────────────────────
+function showPage(name, btn) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  event.target.classList.add('active');
-  if (name === 'trips') loadTrips();
-  if (name === 'drivers') loadDrivers();
+  if (btn) btn.classList.add('active');
+  if (name === 'dispatch') { loadPendingRides(); loadBoxes(); }
+  if (name === 'monitor') loadMonitor();
+  if (name === 'people') { loadDriversTable(); loadSuppliersTable(); }
 }
 
-function toast(msg, ok=true) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.background = ok ? '#276749' : '#c53030';
-  t.style.display = 'block';
-  setTimeout(() => t.style.display = 'none', 3000);
+function showTab(tabId, btn) {
+  document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(tabId).style.display = 'block';
+  btn.classList.add('active');
 }
 
-async function loadTrips() {
-  const [summary, active] = await Promise.all([
-    fetch(API + '/api/dashboard/summary').then(r => r.json()),
-    fetch(API + '/api/dashboard/active_trips').then(r => r.json()),
+// ─── Dispatch: pending rides ───────────────────────────────────────────────
+async function loadPendingRides() {
+  const trips = await fetch(API + '/api/trips/').then(r => r.json()).catch(() => []);
+  pendingRides = trips.filter(t => ['open','unassigned'].includes(t.status));
+  const el = document.getElementById('rides-list');
+  if (!pendingRides.length) {
+    el.innerHTML = '<p style="color:#718096;font-size:.8rem;padding:8px">No pending rides</p>';
+    return;
+  }
+  el.innerHTML = pendingRides.map(t => {
+    const assigned = Object.values(boxAssignments).some(s => s.has(t.id));
+    return `<div class="ride-card${assigned?' assigned':''}" id="ride-${t.id}"
+      draggable="${!assigned}" ondragstart="dragStart(event,${t.id})">
+      <div class="ride-route">#${t.id} ${t.pickup_city} → ${t.dropoff_city}</div>
+      <div class="ride-meta">${fmtDate(t.pickup_time)} · ${t.num_passengers} pax · ${t.vehicle_type.replace('_',' ')}</div>
+    </div>`;
+  }).join('');
+}
+
+function dragStart(e, tripId) {
+  e.dataTransfer.setData('tripId', tripId);
+  document.getElementById('ride-' + tripId).classList.add('dragging');
+  setTimeout(() => document.getElementById('ride-' + tripId)?.classList.remove('dragging'), 0);
+}
+
+// ─── Dispatch: boxes ────────────────────────────────────────────────────────
+async function loadBoxes() {
+  const [drivers, suppliers, regions] = await Promise.all([
+    fetch(API + '/api/drivers/').then(r => r.json()).catch(() => []),
+    fetch(API + '/api/suppliers/').then(r => r.json()).catch(() => []),
+    fetch(API + '/api/regions/').then(r => r.json()).catch(() => []),
   ]);
 
-  const counts = summary.trip_counts;
+  // Build box config: one box per region (driver pool) + one per supplier
+  const regionNames = [...new Set([
+    ...drivers.filter(d => d.active).map(d => d.region).filter(Boolean),
+    ...regions.map(r => r.name),
+  ])];
+
+  boxConfig = [
+    ...regionNames.map(r => ({ id: 'region_' + r, title: r, type: 'driver', region: r })),
+    ...suppliers.filter(s => s.active).map(s => ({
+      id: 'supplier_' + s.id, title: s.name, type: 'supplier',
+      supplier_id: s.id, region: s.region,
+    })),
+  ];
+
+  const panel = document.getElementById('boxes-panel');
+  panel.innerHTML = boxConfig.map(box => `
+    <div class="dispatch-box" id="box-${box.id}"
+      ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event,'${box.id}')">
+      <div class="box-header">
+        <span class="box-title">${box.title}</span>
+        <span class="box-type type-${box.type}">${box.type === 'driver' ? 'Driver Region' : 'Supplier'}</span>
+      </div>
+      <div class="box-rides" id="box-rides-${box.id}"></div>
+      <div class="box-footer">
+        <button class="btn-send" onclick="sendBox('${box.id}')" disabled id="send-${box.id}">Send</button>
+      </div>
+    </div>`).join('');
+
+  Object.keys(boxAssignments).forEach(boxId => {
+    boxAssignments[boxId].forEach(tripId => addChipToBox(boxId, tripId));
+    updateSendBtn(boxId);
+  });
+}
+
+function dragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+
+function drop(e, boxId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const tripId = parseInt(e.dataTransfer.getData('tripId'));
+  if (!tripId) return;
+  // Remove from any other box
+  Object.values(boxAssignments).forEach(s => s.delete(tripId));
+  document.querySelectorAll('.box-ride-chip[data-trip="' + tripId + '"]').forEach(el => el.remove());
+  if (!boxAssignments[boxId]) boxAssignments[boxId] = new Set();
+  boxAssignments[boxId].add(tripId);
+  addChipToBox(boxId, tripId);
+  updateSendBtn(boxId);
+  // Mark card as assigned
+  const card = document.getElementById('ride-' + tripId);
+  if (card) { card.classList.add('assigned'); card.setAttribute('draggable', 'false'); }
+}
+
+function addChipToBox(boxId, tripId) {
+  const trip = pendingRides.find(t => t.id === tripId);
+  if (!trip) return;
+  const chip = document.createElement('div');
+  chip.className = 'box-ride-chip';
+  chip.dataset.trip = tripId;
+  chip.innerHTML = `<span>#${trip.id} ${trip.pickup_city}→${trip.dropoff_city}</span>
+    <span class="remove-chip" onclick="removeFromBox('${boxId}',${tripId})">✕</span>`;
+  document.getElementById('box-rides-' + boxId)?.appendChild(chip);
+}
+
+function removeFromBox(boxId, tripId) {
+  boxAssignments[boxId]?.delete(tripId);
+  document.querySelectorAll(`.box-ride-chip[data-trip="${tripId}"]`).forEach(el => el.remove());
+  updateSendBtn(boxId);
+  const card = document.getElementById('ride-' + tripId);
+  if (card) { card.classList.remove('assigned'); card.setAttribute('draggable', 'true'); }
+}
+
+function updateSendBtn(boxId) {
+  const btn = document.getElementById('send-' + boxId);
+  if (btn) btn.disabled = !(boxAssignments[boxId]?.size > 0);
+}
+
+async function sendBox(boxId) {
+  const box = boxConfig.find(b => b.id === boxId);
+  if (!box) return;
+  const tripIds = [...(boxAssignments[boxId] || [])];
+  if (!tripIds.length) return;
+
+  const btn = document.getElementById('send-' + boxId);
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  const payload = {
+    trip_ids: tripIds,
+    target_type: box.type,
+    ...(box.type === 'driver' ? { region: box.region } : { supplier_id: box.supplier_id }),
+  };
+
+  const res = await fetch(API + '/api/trips/batch-dispatch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (res.ok) {
+    toast(`Sent ${tripIds.length} ride(s) to ${box.title}`);
+    // Clear box
+    boxAssignments[boxId] = new Set();
+    document.getElementById('box-rides-' + boxId).innerHTML = '';
+    tripIds.forEach(id => {
+      const card = document.getElementById('ride-' + id);
+      if (card) card.remove();
+    });
+  } else {
+    toast('Failed to send', false);
+    btn.disabled = false;
+  }
+  btn.textContent = 'Send';
+}
+
+// ─── Monitor ────────────────────────────────────────────────────────────────
+async function loadMonitor() {
+  const [summary, active] = await Promise.all([
+    fetch(API + '/api/dashboard/summary').then(r => r.json()).catch(() => ({trip_counts:{}})),
+    fetch(API + '/api/dashboard/active_trips').then(r => r.json()).catch(() => []),
+  ]);
+  const c = summary.trip_counts || {};
   document.getElementById('stats-grid').innerHTML = [
-    ['Open', counts.open || 0, '#f6ad55'],
-    ['Offered', counts.offered || 0, '#63b3ed'],
-    ['Confirmed', counts.confirmed || 0, '#68d391'],
-    ['Unassigned', counts.unassigned || 0, '#fc8181'],
-    ['Completed', counts.completed || 0, '#a3bffa'],
-  ].map(([label, num, color]) =>
-    `<div class="stat"><div class="stat-num" style="color:${color}">${num}</div><div class="stat-label">${label}</div></div>`
+    ['Open', c.open||0, '#f6ad55'],
+    ['Offered', c.offered||0, '#63b3ed'],
+    ['Pending Approval', (c.pending_approval||0), '#f6ad55'],
+    ['Confirmed', c.confirmed||0, '#68d391'],
+    ['Unassigned', c.unassigned||0, '#fc8181'],
+    ['Completed', c.completed||0, '#a3bffa'],
+  ].map(([l,n,col]) =>
+    `<div class="stat"><div class="stat-num" style="color:${col}">${n}</div><div class="stat-label">${l}</div></div>`
   ).join('');
 
-  document.getElementById('trips-container').innerHTML = active.map(({trip, offers}) => `
+  document.getElementById('monitor-trips').innerHTML = active.map(({trip, offers}) => {
+    const hasPendingApproval = offers.some(o => o.status === 'pending_approval');
+    return `
     <div class="card">
       <div class="card-header">
-        <span><strong>#${trip.id}</strong> ${trip.pickup_city} → ${trip.dropoff_city}
-          &nbsp;|&nbsp; ${fmtDate(trip.pickup_time)}
-          &nbsp;|&nbsp; ${trip.num_passengers} pax &nbsp;|&nbsp; ${trip.vehicle_type}
-          ${trip.price_to_driver ? `&nbsp;|&nbsp; ₪${trip.price_to_driver}` : ''}
+        <span><strong>#${trip.id}</strong> ${trip.pickup_city}→${trip.dropoff_city}
+          &nbsp;|&nbsp;${fmtDate(trip.pickup_time)}&nbsp;|&nbsp;${trip.num_passengers} pax
+          &nbsp;|&nbsp;${trip.vehicle_type.replace('_',' ')}
+          ${trip.price_to_driver ? `&nbsp;|&nbsp;₪${trip.price_to_driver}` : ''}
         </span>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span class="status status-${trip.status}">${trip.status}</span>
-          ${trip.status === 'offered' ? `<button class="btn btn-danger btn-sm" onclick="override(${trip.id},'cancel_offer')">Cancel Offer</button>` : ''}
-          ${trip.status !== 'completed' && trip.status !== 'cancelled' ? `<button class="btn btn-success btn-sm" onclick="override(${trip.id},'mark_handled')">Mark Handled</button>` : ''}
-          <button class="expand-btn" onclick="toggleOffers(${trip.id})">▼ Offers (${offers.length})</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="status s-${trip.status}">${trip.status.replace('_',' ')}</span>
+          <button class="refresh-btn" style="font-size:.75rem" onclick="override(${trip.id},'mark_handled')">✓ Done</button>
+          <button class="expand-btn" onclick="toggleOffers(${trip.id})">▼ Offers(${offers.length})</button>
         </div>
       </div>
+      ${hasPendingApproval ? '<div class="approval-warning">⚠ Awaiting Ride Control approval click</div>' : ''}
       <div class="offers-detail" id="offers-${trip.id}">
-        ${offers.length === 0 ? '<em style="font-size:.8rem;color:#718096">No offers yet</em>' : offers.map(o => `
+        ${offers.length === 0 ? '<em style="color:#718096">No offers yet</em>' : offers.map(o => `
           <div class="offer-row">
-            <strong>${o.driver_name}</strong> (${o.vehicle_type}) —
-            <span class="status status-${o.status}">${o.status}</span>
-            &nbsp; sent ${fmtDate(o.sent_at)}
-            ${o.reply ? `&nbsp;| Reply: "<em>${o.reply}</em>" → <span class="intent-${o.ai_intent}">${o.ai_intent}</span>` : ''}
-            ${o.rank_reason ? `<br><span style="color:#718096;font-size:.75rem">${o.rank_reason}</span>` : ''}
+            <strong>${o.driver_name||o.supplier_name||'?'}</strong>
+            <span class="status s-${o.status}">${o.status.replace('_',' ')}</span>
+            sent ${fmtDate(o.sent_at)}
+            ${o.reply ? ` · "<em>${o.reply}</em>" → <strong>${o.ai_intent}</strong>` : ''}
+            ${o.rank_reason ? `<br><span style="color:#718096;font-size:.72rem">${o.rank_reason}</span>` : ''}
           </div>`).join('')}
       </div>
-    </div>`).join('') || '<p style="color:#718096;text-align:center;padding:32px">No active trips</p>';
+    </div>`;
+  }).join('') || '<p style="color:#718096;text-align:center;padding:24px">No active trips</p>';
 
   document.getElementById('last-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
@@ -216,36 +450,62 @@ function toggleOffers(id) {
   el.style.display = el.style.display === 'block' ? 'none' : 'block';
 }
 
-async function loadDrivers() {
-  const data = await fetch(API + '/api/dashboard/drivers').then(r => r.json());
+async function override(tripId, action, driverId) {
+  const body = { action };
+  if (driverId) body.driver_id = driverId;
+  const res = await fetch(API + `/api/trips/${tripId}/override`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body),
+  });
+  if (res.ok) { toast('Done'); loadMonitor(); } else toast('Failed', false);
+}
+
+// ─── People ─────────────────────────────────────────────────────────────────
+async function loadDriversTable() {
+  const data = await fetch(API + '/api/dashboard/drivers').then(r => r.json()).catch(() => []);
   document.getElementById('drivers-tbody').innerHTML = data.map(d => `
     <tr>
-      <td><strong>${d.name}</strong></td>
-      <td>${d.phone}</td>
-      <td>${d.home_city}</td>
-      <td>${d.vehicle_type}</td>
-      <td>${d.last_offer_at ? fmtDate(d.last_offer_at) : '—'}</td>
-      <td>${d.last_offer_status ? `<span class="status status-${d.last_offer_status}">${d.last_offer_status}</span>` : '—'}</td>
+      <td><strong>${d.name}</strong></td><td>${d.phone}</td>
+      <td>${d.home_city}</td><td>${d.region||'—'}</td>
+      <td>${d.vehicle_type.replace('_',' ')}</td>
+      <td>${d.last_offer_at ? fmtDate(d.last_offer_at) : '—'}
+        ${d.last_offer_status ? `<span class="status s-${d.last_offer_status}">${d.last_offer_status}</span>` : ''}
+      </td>
       <td><span style="color:${d.active?'#276749':'#c53030'}">${d.active?'Yes':'No'}</span></td>
     </tr>`).join('');
 }
 
-async function uploadFile(input) {
-  const file = input.files[0];
-  if (!file) return;
+async function loadSuppliersTable() {
+  const data = await fetch(API + '/api/suppliers/').then(r => r.json()).catch(() => []);
+  document.getElementById('suppliers-tbody').innerHTML = data.map(s => `
+    <tr>
+      <td><strong>${s.name}</strong></td><td>${s.supplier_code}</td>
+      <td>${s.phone}</td><td>${s.region}</td>
+      <td><span style="color:${s.active?'#276749':'#c53030'}">${s.active?'Yes':'No'}</span></td>
+    </tr>`).join('');
+}
+
+// ─── Settings ───────────────────────────────────────────────────────────────
+async function uploadDrivers(input) {
   const fd = new FormData();
-  fd.append('file', file);
-  const res = await fetch(API + '/api/drivers/import', {method: 'POST', body: fd});
+  fd.append('file', input.files[0]);
+  const res = await fetch(API + '/api/drivers/import', { method:'POST', body:fd });
   const data = await res.json();
-  if (res.ok) {
-    document.getElementById('import-result').innerHTML =
-      `<span style="color:#276749">✓ Imported: ${data.created} created, ${data.updated} updated</span>`;
-    toast(`Imported ${data.created + data.updated} drivers`);
-  } else {
-    document.getElementById('import-result').innerHTML =
-      `<span style="color:#c53030">Error: ${data.detail}</span>`;
-    toast('Import failed', false);
-  }
+  document.getElementById('import-result').innerHTML = res.ok
+    ? `<span style="color:#276749">✓ ${data.created} created, ${data.updated} updated</span>`
+    : `<span style="color:#c53030">Error: ${data.detail}</span>`;
+  if (res.ok) toast(`Imported ${data.created + data.updated} drivers`);
+}
+
+async function addSupplier(e) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const payload = Object.fromEntries(fd.entries());
+  payload.active = true;
+  const res = await fetch(API + '/api/suppliers/', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload),
+  });
+  if (res.ok) { toast('Supplier added'); e.target.reset(); loadSuppliersTable(); }
+  else { const err = await res.json(); toast('Error: ' + (err.detail||'?'), false); }
 }
 
 async function createTrip(e) {
@@ -254,46 +514,34 @@ async function createTrip(e) {
   const payload = Object.fromEntries(fd.entries());
   if (!payload.external_booking_id) delete payload.external_booking_id;
   if (!payload.price_to_driver) delete payload.price_to_driver;
-  if (!payload.special_requirements) payload.special_requirements = '';
-  if (!payload.region) payload.region = '';
+  if (!payload.region) delete payload.region;
   payload.source = 'direct';
   payload.num_passengers = parseInt(payload.num_passengers);
   payload.pickup_time = new Date(payload.pickup_time).toISOString();
-
   const res = await fetch(API + '/api/trips/ingest', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload),
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload),
   });
-  if (res.ok) {
-    toast('Trip created and dispatch started!');
-    e.target.reset();
-    showPage('trips');
-  } else {
-    const err = await res.json();
-    toast('Error: ' + (err.detail || 'Unknown'), false);
-  }
+  if (res.ok) { toast('Trip created'); e.target.reset(); showPage('dispatch', document.querySelector('nav button')); }
+  else { const err = await res.json(); toast('Error: '+(err.detail||'?'), false); }
 }
 
-async function override(tripId, action, driverId=null) {
-  const body = {action};
-  if (driverId) body.driver_id = driverId;
-  const res = await fetch(API + `/api/trips/${tripId}/override`, {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(body),
-  });
-  if (res.ok) { toast('Done'); loadTrips(); }
-  else toast('Failed', false);
+// ─── Utils ──────────────────────────────────────────────────────────────────
+function toast(msg, ok=true) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = ok ? '#276749' : '#c53030';
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
 }
 
 function fmtDate(iso) {
-  return new Date(iso).toLocaleString('en-GB', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  return new Date(iso).toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
 }
 
-// Auto-refresh every 30 seconds
-loadTrips();
-setInterval(loadTrips, 30000);
+// ─── Boot ───────────────────────────────────────────────────────────────────
+loadPendingRides();
+loadBoxes();
+setInterval(loadMonitor, 30000);
 </script>
 </body>
 </html>

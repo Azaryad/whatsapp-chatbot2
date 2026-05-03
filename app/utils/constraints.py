@@ -7,18 +7,24 @@ from app.models.offer import Offer, OfferStatus
 from app.utils.shabbat import is_shabbat, is_night
 from app.services.maps import is_long_distance
 
-# Vehicle types that carry the "executive" flag — cannot be substituted
 EXECUTIVE_TYPES = {VehicleType.executive_minivan}
+
+# Sedan class: cars only — never upgrade to minibus
+CAR_CLASS = {VehicleType.sedan, VehicleType.executive_minivan, VehicleType.minivan}
+BUS_CLASS = {VehicleType.minibus_15, VehicleType.minibus_18}
 
 
 def vehicle_eligible(trip_vehicle: VehicleType, driver_vehicle: VehicleType) -> bool:
     """
-    A driver's vehicle is eligible for a trip if:
-    - The trip requires executive: driver must also have an executive vehicle.
-    - Otherwise: driver's vehicle rank >= trip's vehicle rank AND capacity covers passengers.
+    Rules:
+    - executive_minivan trip → only executive_minivan driver (protected class).
+    - sedan trip → car class only (sedan, executive_minivan, minivan). Never minibus.
+    - minivan/minibus trip → same rank or higher.
     """
     if trip_vehicle in EXECUTIVE_TYPES:
         return driver_vehicle == trip_vehicle
+    if trip_vehicle == VehicleType.sedan and driver_vehicle in BUS_CLASS:
+        return False
     return VEHICLE_RANK[driver_vehicle] >= VEHICLE_RANK[trip_vehicle]
 
 

@@ -17,5 +17,5 @@ async def get_db() -> AsyncSession:
 
 async def init_db():
     async with engine.begin() as conn:
-        from app.models import driver, trip, offer, message  # noqa: F401
+        from app.models import driver, trip, offer, message, supplier, region, batch_offer  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)

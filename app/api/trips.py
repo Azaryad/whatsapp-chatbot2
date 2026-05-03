@@ -86,3 +86,44 @@ async def manual_override(trip_id: int, override: ManualOverride, background: Ba
         return {"status": "marked_handled"}
 
     raise HTTPException(status_code=400, detail="Unknown action")
+
+
+@router.post("/{trip_id}/rc-confirmed")
+async def ride_control_approved(trip_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Called by Ride Control when a driver/supplier clicks the approval link.
+    Moves the offer from pending_approval → accepted.
+    """
+    from app.services.approval import confirm_ride_control_approval
+    success = await confirm_ride_control_approval(trip_id, db)
+    if not success:
+        raise HTTPException(status_code=404, detail="No pending_approval offer found for this trip")
+    return {"status": "confirmed"}
+
+
+@router.post("/batch-dispatch")
+async def batch_dispatch_endpoint(
+    payload: dict,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dispatcher sends a set of rides to a region driver queue or a supplier.
+    Body: {"trip_ids": [...], "target_type": "driver"|"supplier",
+           "region": "...", "supplier_id": ...}
+    """
+    from app.services.batch_dispatch import dispatch_driver_batch, dispatch_supplier_batch
+    trip_ids = payload.get("trip_ids", [])
+    target_type = payload.get("target_type")
+
+    if target_type == "driver":
+        region = payload.get("region", "")
+        background.add_task(dispatch_driver_batch, trip_ids, region, db)
+        return {"status": "queued", "target": "driver_region", "region": region}
+    elif target_type == "supplier":
+        supplier_id = payload.get("supplier_id")
+        if not supplier_id:
+            raise HTTPException(status_code=400, detail="supplier_id required")
+        background.add_task(dispatch_supplier_batch, trip_ids, supplier_id, db)
+        return {"status": "queued", "target": "supplier", "supplier_id": supplier_id}
+    raise HTTPException(status_code=400, detail="target_type must be 'driver' or 'supplier'")
