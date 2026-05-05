@@ -84,9 +84,10 @@ async def _offer_next(
     await db.commit()
     await db.refresh(offer)
 
-    rc_link = settings.ride_control_link(trip.external_booking_id or str(trip.id))
+    from app.utils.hmac_token import sign_approval_url
+    approval_link = sign_approval_url(offer.id)
     await app_integration.push_pending_trip(trip.id, driver.drivercode)
-    message_body = await claude.generate_offer_message(driver, trip, rc_link)
+    message_body = await claude.generate_offer_message(driver, trip, approval_link)
 
     wa_id = await whatsapp.send_text(driver.phone, message_body)
     db.add(Message(
@@ -157,10 +158,11 @@ async def _accept_offer(offer: Offer, driver: Driver, trip: Trip, db: AsyncSessi
 
     schedule_approval_check(offer.id)
 
-    rc_link = settings.ride_control_link(trip.external_booking_id or str(trip.id))
+    from app.utils.hmac_token import sign_approval_url
+    approval_link = sign_approval_url(offer.id)
     confirmation = (
         f"מעולה {driver.name.split()[0]}! אנחנו עוד צריכים אישור רשמי שלך. "
-        f"לחץ על הלינק כדי לאשר: {rc_link}"
+        f"לחץ על הלינק כדי לאשר: {approval_link}"
     )
     wa_id = await whatsapp.send_text(driver.phone, confirmation)
     db.add(Message(

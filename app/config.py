@@ -11,9 +11,10 @@ class Settings(BaseSettings):
     supplier_api_token: str = ""
     michel_phone: str = "0526084230"
     app_deeplink_base: str = "https://example.com/trip"
-    # Ride Control web URL for supplier approval links — update when confirmed
-    ride_control_base_url: str = "https://ridecontrol.tlv-transfers.com/booking"
-    rc_callback_token: str = ""
+    # Public base URL of THIS server — used in HMAC-signed approval links
+    approval_base_url: str = "http://localhost:8000"
+    # Long random secret used to sign approval URLs. Generate with secrets.token_urlsafe(32)
+    approval_link_secret: str = ""
     database_url: str = "sqlite+aiosqlite:///./dispatch.db"
     fast_timeout_seconds: int = 0
 
@@ -27,11 +28,15 @@ class Settings(BaseSettings):
 
     @property
     def approval_timeout_seconds(self) -> int:
-        # Time allowed to click the Ride Control link after saying yes on WhatsApp
+        # Time allowed to click the approval link after saying yes on WhatsApp
         return self.fast_timeout_seconds if self.fast_timeout_seconds > 0 else 3600  # 1h
 
-    def ride_control_link(self, booking_id: str) -> str:
-        return f"{self.ride_control_base_url}/{booking_id}"
+    @property
+    def approval_link_ttl_seconds(self) -> int:
+        # How long a signed approval URL stays valid. Covers batch + approval timeout windows.
+        if self.fast_timeout_seconds > 0:
+            return self.fast_timeout_seconds * 2
+        return self.driver_offer_timeout_seconds + self.approval_timeout_seconds + 1800  # +30min buffer
 
     class Config:
         env_file = ".env"

@@ -1,13 +1,15 @@
 """
-Ride Control approval tracking.
+Driver approval tracking.
 
 Flow after a driver says yes on WhatsApp:
   1. Offer moves to status=pending_approval
   2. Approval timeout job fires after 1h (or fast_timeout_seconds)
   3. If offer still pending_approval → mark approval_timeout, suspend trip,
      notify Michel, re-offer to next driver
-  4. When Ride Control calls POST /api/trips/rc-status/{booking_id},
-     offer → accepted (approved) or rejected + requeue (declined)
+  4. When the driver clicks an HMAC-signed approval link, our /approve page
+     calls handle_driver_approval(offer_id, action, db):
+       - approved → offer accepted, trip confirmed, write back to Ride Control
+       - declined → offer rejected, trip re-queued
 
 This module handles steps 2–4.
 """
@@ -78,36 +80,34 @@ async def _check_approval(offer_id: int) -> None:
             await _requeue_trip(trip, offer.batch_offer_id or 0, region, db)
 
 
-async def handle_rc_status(booking_id: str, status: str, db: AsyncSession) -> bool:
+async def handle_driver_approval(offer_id: int, action: str, db: AsyncSession) -> tuple[bool, str]:
     """
-    Called when Ride Control POSTs a callback after the driver clicks the approval link.
-    booking_id is the external booking ID (e.g. "RC-20045").
-    status is "approved" or "declined".
+    Process a driver's click on the approval page.
+    action is "approved" or "declined".
+    Returns (ok, reason). reason is empty on success, else: not_found / wrong_status / bad_action.
     """
     from app.services.supplier import assign_driver_to_booking, update_booking_notes
 
-    trip_result = await db.execute(
-        select(Trip).where(Trip.external_booking_id == booking_id)
-    )
-    trip = trip_result.scalar_one_or_none()
-    if not trip:
-        return False
+    if action not in ("approved", "declined"):
+        return False, "bad_action"
 
-    offer_result = await db.execute(
-        select(Offer).where(
-            Offer.trip_id == trip.id,
-            Offer.status == OfferStatus.pending_approval,
-        ).order_by(Offer.created_at.desc()).limit(1)
-    )
-    offer = offer_result.scalar_one_or_none()
+    offer = await db.get(Offer, offer_id)
     if not offer:
-        return False
+        return False, "not_found"
 
+    if offer.status not in (OfferStatus.pending, OfferStatus.pending_approval):
+        return False, "wrong_status"
+
+    trip = await db.get(Trip, offer.trip_id)
+    if not trip:
+        return False, "not_found"
+
+    # Cancel any pending approval-timeout job
     job_id = f"approval_check_{offer.id}"
     if scheduler.get_job(job_id):
         scheduler.remove_job(job_id)
 
-    if status == "approved":
+    if action == "approved":
         offer.status = OfferStatus.accepted
         trip.status = TripStatus.confirmed
         await db.commit()
@@ -119,16 +119,22 @@ async def handle_rc_status(booking_id: str, status: str, db: AsyncSession) -> bo
                 notes = f"Driver: {driver.name} | {driver.phone}"
                 await update_booking_notes(trip.external_booking_id, notes)
             if driver:
-                await whatsapp.send_text(driver.phone, f"מעולה {driver.name.split()[0]}! הנסיעה אושרה רשמית. תודה!")
+                await whatsapp.send_text(
+                    driver.phone,
+                    f"מעולה {driver.name.split()[0]}! הנסיעה אושרה רשמית. תודה!",
+                )
 
-    elif status == "declined":
+    else:  # declined
         offer.status = OfferStatus.rejected
         trip.status = TripStatus.open
         await db.commit()
 
         name, phone = await _get_contact(offer, db)
         if name and phone:
-            await whatsapp.send_text(phone, f"הי {name.split()[0]}, ראינו שלא אישרת את הנסיעה. מועברת לנהג אחר.")
+            await whatsapp.send_text(
+                phone,
+                f"הי {name.split()[0]}, ראינו שלא אישרת את הנסיעה. מועברת לנהג אחר.",
+            )
 
         if offer.driver_id:
             driver = await db.get(Driver, offer.driver_id)
@@ -136,7 +142,7 @@ async def handle_rc_status(booking_id: str, status: str, db: AsyncSession) -> bo
             from app.services.batch_dispatch import _requeue_trip
             await _requeue_trip(trip, offer.batch_offer_id or 0, region, db)
 
-    return True
+    return True, ""
 
 
 async def _get_contact(offer: Offer, db: AsyncSession) -> tuple[str, str]:

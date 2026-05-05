@@ -1,8 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
-from app.config import settings
 from app.schemas.trip import TripIngest, TripRead
 from app.schemas.offer import ManualOverride
 from app.models.trip import Trip, TripStatus
@@ -84,35 +83,6 @@ async def manual_override(trip_id: int, override: ManualOverride, background: Ba
         return {"status": "marked_handled"}
 
     raise HTTPException(status_code=400, detail="Unknown action")
-
-
-@router.post("/rc-status/{booking_id}")
-async def ride_control_status_callback(
-    booking_id: str,
-    payload: dict,
-    authorization: str = Header(default=""),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Called by Ride Control when a driver clicks Approve or Decline on the approval page.
-    booking_id is the external booking ID (e.g. RC-20045).
-    Body: {"status": "approved"|"declined", "timestamp": "..."}
-    Auth: Bearer token in Authorization header.
-    """
-    if settings.rc_callback_token:
-        token = authorization.removeprefix("Bearer ").strip()
-        if token != settings.rc_callback_token:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-
-    status = payload.get("status", "")
-    if status not in ("approved", "declined"):
-        raise HTTPException(status_code=400, detail="status must be 'approved' or 'declined'")
-
-    from app.services.approval import handle_rc_status
-    success = await handle_rc_status(booking_id, status, db)
-    if not success:
-        raise HTTPException(status_code=404, detail="No pending_approval offer found for this booking")
-    return {"status": "ok"}
 
 
 @router.post("/batch-dispatch")

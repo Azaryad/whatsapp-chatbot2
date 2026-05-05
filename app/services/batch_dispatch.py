@@ -74,6 +74,7 @@ async def dispatch_driver_batch(trip_ids: list[int], region: str, db: AsyncSessi
 
 
 async def _send_driver_batch(driver: Driver, trips: list[Trip], db: AsyncSession) -> BatchOffer:
+    from app.utils.hmac_token import sign_approval_url
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.driver_offer_timeout_seconds)
     batch = BatchOffer(
         batch_type=BatchType.driver,
@@ -83,6 +84,7 @@ async def _send_driver_batch(driver: Driver, trips: list[Trip], db: AsyncSession
     db.add(batch)
     await db.flush()
 
+    trip_offer_pairs: list[tuple[Trip, Offer]] = []
     for trip in trips:
         offer = Offer(
             trip_id=trip.id,
@@ -92,11 +94,14 @@ async def _send_driver_batch(driver: Driver, trips: list[Trip], db: AsyncSession
         )
         db.add(offer)
         trip.status = TripStatus.offered
+        trip_offer_pairs.append((trip, offer))
 
     await db.commit()
     await db.refresh(batch)
+    for _, offer in trip_offer_pairs:
+        await db.refresh(offer)
 
-    links = [settings.ride_control_link(t.external_booking_id or str(t.id)) for t in trips]
+    links = [sign_approval_url(offer.id) for _, offer in trip_offer_pairs]
     message_body = await claude.generate_batch_offer_message(driver, trips, links)
     wa_id = await whatsapp.send_text(driver.phone, message_body)
     batch.wa_message_id = wa_id
@@ -259,6 +264,7 @@ async def dispatch_supplier_batch(trip_ids: list[int], supplier_id: int, db: Asy
     db.add(batch)
     await db.flush()
 
+    trip_offer_pairs: list[tuple[Trip, Offer]] = []
     for trip in trips:
         offer = Offer(
             trip_id=trip.id,
@@ -268,11 +274,14 @@ async def dispatch_supplier_batch(trip_ids: list[int], supplier_id: int, db: Asy
         )
         db.add(offer)
         trip.status = TripStatus.offered
+        trip_offer_pairs.append((trip, offer))
 
     await db.commit()
     await db.refresh(batch)
+    for _, offer in trip_offer_pairs:
+        await db.refresh(offer)
 
-    message_body = await _build_supplier_message(supplier, trips)
+    message_body = await _build_supplier_message(supplier, trip_offer_pairs)
     wa_id = await whatsapp.send_text(supplier.phone, message_body)
     batch.wa_message_id = wa_id
     await db.commit()
@@ -351,17 +360,18 @@ async def _supplier_batch_timeout(batch_id: int) -> None:
             await _notify_michel_unassigned(unconfirmed, [], db)
 
 
-async def _build_supplier_message(supplier: Supplier, trips: list[Trip]) -> str:
-    lines = [f"היי {supplier.name}, יש לך {len(trips)} נסיעות לאישור:\n"]
-    for i, trip in enumerate(trips, 1):
-        link = settings.ride_control_link(trip.external_booking_id or str(trip.id))
+async def _build_supplier_message(supplier: Supplier, trip_offer_pairs: list[tuple[Trip, Offer]]) -> str:
+    from app.utils.hmac_token import sign_approval_url
+    lines = [f"היי {supplier.name}, יש לך {len(trip_offer_pairs)} נסיעות לאישור:\n"]
+    for i, (trip, offer) in enumerate(trip_offer_pairs, 1):
+        link = sign_approval_url(offer.id)
         lines.append(
             f"{i}. {trip.pickup_time.strftime('%a %d/%m %H:%M')} | "
             f"{trip.pickup_city} → {trip.dropoff_city} | "
             f"{trip.num_passengers} נוסעים\n"
             f"   אישור: {link}\n"
         )
-    lines.append("ענה לכל נסיעה עם מספר ו'מאשר' או 'לא יכול'.")
+    lines.append("ענה לכל נסיעה עם מספר ו'מאשר' או 'לא יכול', או לחץ על הלינק לאישור ישיר.")
     return "\n".join(lines)
 
 

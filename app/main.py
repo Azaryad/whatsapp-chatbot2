@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 
 from app.database import init_db
 from app.services.scheduler import start_scheduler
-from app.api import webhooks, trips, drivers, dashboard, suppliers, regions
+from app.api import webhooks, trips, drivers, dashboard, suppliers, regions, approval
 
 
 @asynccontextmanager
@@ -23,6 +23,7 @@ app.include_router(drivers.router)
 app.include_router(dashboard.router)
 app.include_router(suppliers.router)
 app.include_router(regions.router)
+app.include_router(approval.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
