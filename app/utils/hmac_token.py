@@ -13,12 +13,18 @@ from app.config import settings
 
 
 def sign_approval_url(offer_id: int, ttl_seconds: int | None = None) -> str:
-    """Generate a signed approval URL valid for ttl_seconds (default from settings)."""
+    """Generate a full signed approval URL valid for ttl_seconds (default from settings)."""
+    exp, sig = sign_approval_params(offer_id, ttl_seconds)
+    base = settings.approval_base_url.rstrip("/")
+    return f"{base}/approve?offer={offer_id}&exp={exp}&sig={sig}"
+
+
+def sign_approval_params(offer_id: int, ttl_seconds: int | None = None) -> tuple[int, str]:
+    """Return (exp, sig) for an offer. Useful when generating inline forms server-side."""
     ttl = ttl_seconds if ttl_seconds is not None else settings.approval_link_ttl_seconds
     exp = int(time.time()) + ttl
     sig = _compute_sig(offer_id, exp)
-    base = settings.approval_base_url.rstrip("/")
-    return f"{base}/approve?offer={offer_id}&exp={exp}&sig={sig}"
+    return exp, sig
 
 
 def verify_approval_params(offer_id: int, exp: int, sig: str) -> tuple[bool, str]:
