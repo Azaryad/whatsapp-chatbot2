@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     @property
     def driver_offer_timeout_seconds(self) -> int:
-        return self.fast_timeout_seconds if self.fast_timeout_seconds > 0 else 10800  # 3h
+        return self.fast_timeout_seconds if self.fast_timeout_seconds > 0 else 3600  # 1h
 
     @property
     def supplier_offer_timeout_seconds(self) -> int:
