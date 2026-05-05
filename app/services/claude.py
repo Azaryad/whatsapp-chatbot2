@@ -222,28 +222,29 @@ async def rank_drivers_for_batch(trips: list[Trip], drivers: list[Driver]) -> li
         return [{"driver_id": d.id, "reason": "fallback"} for d in drivers]
 
 
-async def generate_batch_offer_message(driver: Driver, trips: list[Trip]) -> str:
-    """Generate a Hebrew WhatsApp message offering multiple rides to a driver."""
+async def generate_batch_offer_message(driver: Driver, trips: list[Trip], links: list[str]) -> str:
+    """Generate a Hebrew WhatsApp message offering multiple rides to a driver, with per-trip RC links."""
     trips_text = "\n".join(
         f"{i+1}. {_day_hebrew(t.pickup_time.weekday())} {t.pickup_time.strftime('%H:%M')} "
-        f"{t.pickup_city}→{t.dropoff_city} ({t.num_passengers} נוסעים)"
+        f"{t.pickup_city}→{t.dropoff_city} ({t.num_passengers} נוסעים) | אישור: {links[i]}"
         for i, t in enumerate(trips)
     )
     prompt = (
         f"Write a short casual Hebrew WhatsApp message offering {len(trips)} rides to driver "
-        f"{driver.name.split()[0]}.\n\nRides:\n{trips_text}\n\n"
+        f"{driver.name.split()[0]}.\n\nRides (each includes an approval link):\n{trips_text}\n\n"
         f"Ask them to reply with the ride number and yes/no for each. "
-        f"Friendly dispatcher tone. No emojis. Text only. 4 lines max."
+        f"Mention that after replying yes they must click the link to officially confirm. "
+        f"Friendly dispatcher tone. No emojis. Text only. Keep it short."
     )
     try:
         client = _get_client()
         response = await client.messages.create(
-            model=MODEL, max_tokens=300,
+            model=MODEL, max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
         )
         return response.content[0].text.strip()
     except Exception:
-        return f"היי {driver.name.split()[0]}, יש לך {len(trips)} נסיעות:\n{trips_text}\nענה לכל נסיעה כן/לא."
+        return f"היי {driver.name.split()[0]}, יש לך {len(trips)} נסיעות:\n{trips_text}\nענה לכל נסיעה כן/לא, ואחרי כן לחץ על הלינק לאישור רשמי."
 
 
 async def parse_batch_reply(driver_name: str, reply: str, trips: list[Trip]) -> dict:

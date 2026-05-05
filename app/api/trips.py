@@ -1,19 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
+from app.config import settings
 from app.schemas.trip import TripIngest, TripRead
 from app.schemas.offer import ManualOverride
 from app.models.trip import Trip, TripStatus
 from app.models.offer import Offer, OfferStatus
-from app.services.dispatch import start_dispatch
 
 router = APIRouter(prefix="/api/trips", tags=["trips"])
 
 
 @router.post("/ingest", response_model=TripRead, status_code=201)
-async def ingest_trip(payload: TripIngest, background: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    """Receive a new trip pushed from the main operating system."""
+async def ingest_trip(payload: TripIngest, db: AsyncSession = Depends(get_db)):
+    """Receive a new trip pushed from the main operating system. Trip sits open until manually dispatched."""
     if payload.external_booking_id:
         existing = await db.execute(
             select(Trip).where(Trip.external_booking_id == payload.external_booking_id)
@@ -25,8 +25,6 @@ async def ingest_trip(payload: TripIngest, background: BackgroundTasks, db: Asyn
     db.add(trip)
     await db.commit()
     await db.refresh(trip)
-
-    background.add_task(start_dispatch, trip.id)
     return trip
 
 
@@ -88,17 +86,33 @@ async def manual_override(trip_id: int, override: ManualOverride, background: Ba
     raise HTTPException(status_code=400, detail="Unknown action")
 
 
-@router.post("/{trip_id}/rc-confirmed")
-async def ride_control_approved(trip_id: int, db: AsyncSession = Depends(get_db)):
+@router.post("/rc-status/{booking_id}")
+async def ride_control_status_callback(
+    booking_id: str,
+    payload: dict,
+    authorization: str = Header(default=""),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Called by Ride Control when a driver/supplier clicks the approval link.
-    Moves the offer from pending_approval → accepted.
+    Called by Ride Control when a driver clicks Approve or Decline on the approval page.
+    booking_id is the external booking ID (e.g. RC-20045).
+    Body: {"status": "approved"|"declined", "timestamp": "..."}
+    Auth: Bearer token in Authorization header.
     """
-    from app.services.approval import confirm_ride_control_approval
-    success = await confirm_ride_control_approval(trip_id, db)
+    if settings.rc_callback_token:
+        token = authorization.removeprefix("Bearer ").strip()
+        if token != settings.rc_callback_token:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+    status = payload.get("status", "")
+    if status not in ("approved", "declined"):
+        raise HTTPException(status_code=400, detail="status must be 'approved' or 'declined'")
+
+    from app.services.approval import handle_rc_status
+    success = await handle_rc_status(booking_id, status, db)
     if not success:
-        raise HTTPException(status_code=404, detail="No pending_approval offer found for this trip")
-    return {"status": "confirmed"}
+        raise HTTPException(status_code=404, detail="No pending_approval offer found for this booking")
+    return {"status": "ok"}
 
 
 @router.post("/batch-dispatch")

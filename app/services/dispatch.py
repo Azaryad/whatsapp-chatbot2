@@ -71,7 +71,7 @@ async def _offer_next(
         await _offer_next(trip, ranked, tried_driver_ids, db)
         return
 
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.offer_timeout_seconds)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.driver_offer_timeout_seconds)
     offer = Offer(
         trip_id=trip.id,
         driver_id=driver.id,
@@ -84,9 +84,9 @@ async def _offer_next(
     await db.commit()
     await db.refresh(offer)
 
-    link = await app_integration.get_trip_link(trip.id)
+    rc_link = settings.ride_control_link(trip.external_booking_id or str(trip.id))
     await app_integration.push_pending_trip(trip.id, driver.drivercode)
-    message_body = await claude.generate_offer_message(driver, trip, link)
+    message_body = await claude.generate_offer_message(driver, trip, rc_link)
 
     wa_id = await whatsapp.send_text(driver.phone, message_body)
     db.add(Message(
@@ -149,17 +149,19 @@ async def handle_driver_reply(from_phone: str, wa_message_id: str, body: str) ->
 
 async def _accept_offer(offer: Offer, driver: Driver, trip: Trip, db: AsyncSession) -> None:
     from app.services.scheduler import cancel_offer_timeout
+    from app.services.approval import schedule_approval_check
     cancel_offer_timeout(offer.id)
-    await app_integration.cancel_pending_trip(trip.id, driver.drivercode)
 
-    offer.status = OfferStatus.accepted
-    trip.status = TripStatus.confirmed
+    offer.status = OfferStatus.pending_approval
     await db.commit()
 
-    if trip.external_booking_id:
-        await assign_driver_to_booking(trip.external_booking_id, driver.drivercode)
+    schedule_approval_check(offer.id)
 
-    confirmation = f"מעולה {driver.name.split()[0]}! הנסיעה שלך אושרה. תודה רבה!"
+    rc_link = settings.ride_control_link(trip.external_booking_id or str(trip.id))
+    confirmation = (
+        f"מעולה {driver.name.split()[0]}! אנחנו עוד צריכים אישור רשמי שלך. "
+        f"לחץ על הלינק כדי לאשר: {rc_link}"
+    )
     wa_id = await whatsapp.send_text(driver.phone, confirmation)
     db.add(Message(
         driver_id=driver.id,
@@ -169,10 +171,6 @@ async def _accept_offer(offer: Offer, driver: Driver, trip: Trip, db: AsyncSessi
         related_offer_id=offer.id,
     ))
     await db.commit()
-
-    all_tried = await _get_tried_driver_ids(trip.id, db)
-    all_tried_drivers = await _load_drivers(all_tried, db)
-    await _notify_michel(trip, driver, all_tried_drivers, db)
 
 
 async def _reject_offer(offer: Offer, driver: Driver, trip: Trip, db: AsyncSession) -> None:

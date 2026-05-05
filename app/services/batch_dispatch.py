@@ -29,7 +29,6 @@ from app.models.offer import Offer, OfferStatus
 from app.models.batch_offer import BatchOffer, BatchType, BatchStatus
 from app.models.message import Message, MessageDirection
 from app.services import whatsapp, claude
-from app.services.supplier import assign_driver_to_booking
 from app.services.scheduler import scheduler
 
 
@@ -97,7 +96,8 @@ async def _send_driver_batch(driver: Driver, trips: list[Trip], db: AsyncSession
     await db.commit()
     await db.refresh(batch)
 
-    message_body = await claude.generate_batch_offer_message(driver, trips)
+    links = [settings.ride_control_link(t.external_booking_id or str(t.id)) for t in trips]
+    message_body = await claude.generate_batch_offer_message(driver, trips, links)
     wa_id = await whatsapp.send_text(driver.phone, message_body)
     batch.wa_message_id = wa_id
 
@@ -150,13 +150,12 @@ async def handle_driver_batch_reply(from_phone: str, wa_message_id: str, body: s
         parsed = await claude.parse_batch_reply(driver.name, body, trips)
 
         refused_trips: list[Trip] = []
+        pending_approval_offers: list[tuple[Offer, Trip]] = []
         for offer, trip, intent in zip(offers, trips, parsed["per_ride"]):
             if intent == "yes":
-                offer.status = OfferStatus.accepted
+                offer.status = OfferStatus.pending_approval
                 offer.ai_interpretation = "yes"
-                trip.status = TripStatus.confirmed
-                if trip.external_booking_id:
-                    await assign_driver_to_booking(trip.external_booking_id, driver.drivercode)
+                pending_approval_offers.append((offer, trip))
             elif intent == "no":
                 offer.status = OfferStatus.rejected
                 offer.ai_interpretation = "no"
@@ -166,6 +165,15 @@ async def handle_driver_batch_reply(from_phone: str, wa_message_id: str, body: s
                 offer.ai_interpretation = "ambiguous"
 
         await db.commit()
+
+        if pending_approval_offers:
+            from app.services.approval import schedule_approval_check
+            for offer, trip in pending_approval_offers:
+                schedule_approval_check(offer.id)
+            rc_link_reminder = (
+                f"תודה {driver.name.split()[0]}! כדי לאשר רשמית — לחץ על הלינק שנשלח לכל נסיעה."
+            )
+            await whatsapp.send_text(driver.phone, rc_link_reminder)
 
         if refused_trips:
             farewell = await claude.generate_rejection_followup(driver.name)
@@ -178,8 +186,10 @@ async def handle_driver_batch_reply(from_phone: str, wa_message_id: str, body: s
             batch.status = BatchStatus.completed
             await db.commit()
             scheduler.remove_job(f"batch_timeout_{batch.id}")
-            accepted = [t for o, t in zip(offers, trips) if o.status == OfferStatus.accepted]
-            await _notify_michel_summary(driver, accepted, refused_trips, db)
+            # pending_approval = driver said yes, awaiting RC link click — report as pending
+            confirmed = [t for o, t in zip(offers, trips) if o.status == OfferStatus.accepted]
+            pending_rc = [t for o, t in zip(offers, trips) if o.status == OfferStatus.pending_approval]
+            await _notify_michel_summary(driver, confirmed, refused_trips, pending_rc, db)
 
         await _check_restriction_update_for_driver(driver, body, db)
 
@@ -445,10 +455,12 @@ async def _find_supplier_by_phone(phone: str, db: AsyncSession) -> Supplier | No
     return result.scalar_one_or_none()
 
 
-async def _notify_michel_summary(driver: Driver, accepted: list[Trip], refused: list[Trip], db: AsyncSession) -> None:
+async def _notify_michel_summary(driver: Driver, accepted: list[Trip], refused: list[Trip], pending_rc: list[Trip], db: AsyncSession) -> None:
     lines = [f"סיכום נסיעות — {driver.name}:"]
     for t in accepted:
         lines.append(f"✓ #{t.id} {t.pickup_city}→{t.dropoff_city} {t.pickup_time.strftime('%d/%m %H:%M')}")
+    for t in pending_rc:
+        lines.append(f"⏳ #{t.id} {t.pickup_city}→{t.dropoff_city} — ממתין לאישור לינק")
     for t in refused:
         lines.append(f"✗ #{t.id} {t.pickup_city}→{t.dropoff_city} — סירב")
     await whatsapp.send_text(settings.michel_phone, "\n".join(lines))

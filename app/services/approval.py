@@ -1,12 +1,13 @@
 """
 Ride Control approval tracking.
 
-Flow after a driver/supplier says yes on WhatsApp:
-  1. Offers move to status=pending_approval
+Flow after a driver says yes on WhatsApp:
+  1. Offer moves to status=pending_approval
   2. Approval timeout job fires after 1h (or fast_timeout_seconds)
   3. If offer still pending_approval → mark approval_timeout, suspend trip,
      notify Michel, re-offer to next driver
-  4. When Ride Control calls POST /api/trips/{id}/rc-confirmed, offer → accepted
+  4. When Ride Control calls POST /api/trips/rc-status/{booking_id},
+     offer → accepted (approved) or rejected + requeue (declined)
 
 This module handles steps 2–4.
 """
@@ -77,32 +78,64 @@ async def _check_approval(offer_id: int) -> None:
             await _requeue_trip(trip, offer.batch_offer_id or 0, region, db)
 
 
-async def confirm_ride_control_approval(trip_id: int, db: AsyncSession) -> bool:
+async def handle_rc_status(booking_id: str, status: str, db: AsyncSession) -> bool:
     """
-    Called when Ride Control sends the approval confirmation (POST /api/trips/{id}/rc-confirmed).
-    Moves the offer from pending_approval → accepted.
+    Called when Ride Control POSTs a callback after the driver clicks the approval link.
+    booking_id is the external booking ID (e.g. "RC-20045").
+    status is "approved" or "declined".
     """
-    result = await db.execute(
+    from app.services.supplier import assign_driver_to_booking, update_booking_notes
+
+    trip_result = await db.execute(
+        select(Trip).where(Trip.external_booking_id == booking_id)
+    )
+    trip = trip_result.scalar_one_or_none()
+    if not trip:
+        return False
+
+    offer_result = await db.execute(
         select(Offer).where(
-            Offer.trip_id == trip_id,
+            Offer.trip_id == trip.id,
             Offer.status == OfferStatus.pending_approval,
         ).order_by(Offer.created_at.desc()).limit(1)
     )
-    offer = result.scalar_one_or_none()
+    offer = offer_result.scalar_one_or_none()
     if not offer:
         return False
 
-    offer.status = OfferStatus.accepted
-    trip = await db.get(Trip, trip_id)
-    if trip:
-        trip.status = TripStatus.confirmed
-
-    # Cancel the pending approval check
     job_id = f"approval_check_{offer.id}"
     if scheduler.get_job(job_id):
         scheduler.remove_job(job_id)
 
-    await db.commit()
+    if status == "approved":
+        offer.status = OfferStatus.accepted
+        trip.status = TripStatus.confirmed
+        await db.commit()
+
+        if offer.driver_id:
+            driver = await db.get(Driver, offer.driver_id)
+            if driver and trip.external_booking_id:
+                await assign_driver_to_booking(trip.external_booking_id, driver.drivercode)
+                notes = f"Driver: {driver.name} | {driver.phone}"
+                await update_booking_notes(trip.external_booking_id, notes)
+            if driver:
+                await whatsapp.send_text(driver.phone, f"מעולה {driver.name.split()[0]}! הנסיעה אושרה רשמית. תודה!")
+
+    elif status == "declined":
+        offer.status = OfferStatus.rejected
+        trip.status = TripStatus.open
+        await db.commit()
+
+        name, phone = await _get_contact(offer, db)
+        if name and phone:
+            await whatsapp.send_text(phone, f"הי {name.split()[0]}, ראינו שלא אישרת את הנסיעה. מועברת לנהג אחר.")
+
+        if offer.driver_id:
+            driver = await db.get(Driver, offer.driver_id)
+            region = driver.region if driver else ""
+            from app.services.batch_dispatch import _requeue_trip
+            await _requeue_trip(trip, offer.batch_offer_id or 0, region, db)
+
     return True
 
 

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     app_deeplink_base: str = "https://example.com/trip"
     # Ride Control web URL for supplier approval links — update when confirmed
     ride_control_base_url: str = "https://ridecontrol.tlv-transfers.com/booking"
+    rc_callback_token: str = ""
     database_url: str = "sqlite+aiosqlite:///./dispatch.db"
     fast_timeout_seconds: int = 0
 
