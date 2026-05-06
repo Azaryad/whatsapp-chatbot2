@@ -85,6 +85,19 @@ async def manual_override(trip_id: int, override: ManualOverride, background: Ba
     raise HTTPException(status_code=400, detail="Unknown action")
 
 
+@router.post("/pull-from-rc")
+async def pull_from_ride_control(payload: dict | None = None, db: AsyncSession = Depends(get_db)):
+    """
+    Manually pull newly assigned bookings from Ride Control.
+    Triggered by the dispatcher pressing the 'Pull from Ride Control' button.
+    Body (optional): {"days_ahead": <int>}  — defaults to 7.
+    """
+    from app.services.rc_pull import pull_new_bookings
+    days_ahead = (payload or {}).get("days_ahead", 7)
+    result = await pull_new_bookings(db, days_ahead=int(days_ahead))
+    return result
+
+
 @router.post("/batch-dispatch")
 async def batch_dispatch_endpoint(
     payload: dict,

@@ -31,7 +31,7 @@ app so it appears immediately when they tap the WhatsApp link.
 
 **Endpoint:** `POST /api/app/pending-trip`
 
-**Auth:** Bearer token (same `SUPPLIER_API_TOKEN`)
+**Auth:** HMAC-signed headers (same scheme as Ride Control: `X-Api-Key` + `X-Timestamp` + `X-Signature`, signed with the shared `SUPPLIER_API_SECRET`).
 
 **Request body:**
 ```json

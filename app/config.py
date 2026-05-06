@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     wa_verify_token: str
     google_maps_api_key: str
     supplier_api_base: str = "https://ridecontrolapi.tlv-transfers.com/rest/default/supplier"
-    supplier_api_token: str = ""
+    supplier_api_key: str = ""     # 64-char hex X-Api-Key issued by Ride Control admin
+    supplier_api_secret: str = ""  # secret for HMAC-SHA256 signing
     michel_phone: str = "0526084230"
     app_deeplink_base: str = "https://example.com/trip"
     # Public base URL of THIS server — used in HMAC-signed approval links

@@ -48,7 +48,10 @@ Open http://localhost:8000 for the dispatcher dashboard.
 | `WA_ACCESS_TOKEN` | Meta Developer dashboard → WhatsApp |
 | `WA_VERIFY_TOKEN` | Any string you choose |
 | `GOOGLE_MAPS_API_KEY` | Google Cloud Console → Distance Matrix API |
-| `SUPPLIER_API_TOKEN` | From tlv-transfers system admin |
+| `SUPPLIER_API_KEY` | 64-char hex API key issued by Ride Control admin |
+| `SUPPLIER_API_SECRET` | HMAC signing secret issued alongside the API key |
+| `APPROVAL_LINK_SECRET` | Random 32-byte string for signing driver approval URLs |
+| `APPROVAL_BASE_URL` | Public URL of this server (e.g. https://dispatch.tlv-transfers.com) |
 
 ### Dev mode with fast timeout (30 seconds instead of 3 hours)
 

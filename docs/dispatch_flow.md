@@ -13,15 +13,20 @@ A booking exists in Ride Control with no driver. The agent has zero awareness of
 
 ---
 
-## Stage 2 — Dispatcher manually pushes the ride to the agent
+## Stage 2 — Dispatcher pulls bookings from Ride Control
 
-The dispatcher decides this ride should go through the WhatsApp agent (rather than to an internal driver). They push it to our system.
+Ride Control does NOT push to us. The dispatcher manually triggers a pull when they want to see new bookings.
 
-- **Endpoint:** `POST /api/trips/ingest`
-- **Result:** Trip stored with `status = open`. No dispatch yet.
-- **Why manual:** some bookings are handled by internal drivers and must never enter the agent queue.
+- **Trigger:** dispatcher presses "⇩ Pull" button in the dashboard.
+- **Endpoint:** `POST /api/trips/pull-from-rc` → `pull_new_bookings()` in `app/services/rc_pull.py`.
+- **Backend call:** `GET /rest/default/supplier/bookings?from=today&to=today+7` against Ride Control.
+- **Result:** for every booking we don't already have, a Trip row is created with `status = open`. Existing booking IDs are skipped (deduplication by `external_booking_id`).
+- **Frequency:** manual only. **NO automatic polling.** The dispatcher decides when to refresh.
 
-> **Do NOT** add auto-dispatch on ingest. The manual gate is intentional.
+Alternatively (legacy / manual entry): `POST /api/trips/ingest` still works — the dispatcher can type a booking by hand.
+
+> **Do NOT** add auto-polling. The manual gate is intentional.
+> **Do NOT** add auto-dispatch when a trip enters `open` status — it stays open until manually dispatched in Stage 3.
 
 ---
 
@@ -163,7 +168,8 @@ Anyone modifying the code to mark a trip confirmed on WhatsApp YES alone, or to 
 
 | Stage | File |
 |---|---|
-| 2 (ingest) | `app/api/trips.py` |
+| 2 (pull from RC) | `app/api/trips.py` (`pull_from_ride_control`); `app/services/rc_pull.py`; `app/services/supplier.py` (`list_bookings`) |
+| 2 (manual ingest) | `app/api/trips.py` (`ingest_trip`) |
 | 3 (batch-dispatch endpoint) | `app/api/trips.py` |
 | 4 (driver path) | `app/services/batch_dispatch.py` — `dispatch_driver_batch`, `_send_driver_batch` |
 | 4 (supplier path) | `app/services/batch_dispatch.py` — `dispatch_supplier_batch`, `_build_supplier_message` |
@@ -180,10 +186,13 @@ Anyone modifying the code to mark a trip confirmed on WhatsApp YES alone, or to 
 
 ## When making changes, check:
 
-- Does the change preserve the **manual ingest gate**? (no auto-dispatch on ingest)
+- Does the change preserve the **manual pull gate**? (no auto-polling of Ride Control)
+- Does the change preserve the **manual ingest gate**? (no auto-dispatch when a trip enters `open`)
 - Does the change preserve the **two-gate approval**? (WhatsApp YES ≠ confirmed; only the link click writes to Ride Control)
 - Does it still **immediately re-queue refused trips**, not wait for batch timeout?
 - Does the approval page still **validate HMAC + expiry + offer status** on both GET and POST?
+- Are outbound calls to Ride Control still HMAC-signed with `X-Api-Key`/`X-Timestamp`/`X-Signature`?
 - Are timeouts still configurable via `fast_timeout_seconds`?
 - Are approval URLs always generated via `sign_approval_url` (never hand-built)?
 - Is `APPROVAL_LINK_SECRET` set in production? (without it, all links are rejected)
+- Are `SUPPLIER_API_KEY` and `SUPPLIER_API_SECRET` set? (without them, all RC calls fail)

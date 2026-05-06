@@ -119,7 +119,10 @@
         Pending Rides
         <div class="sel-hint" id="sel-hint" style="display:none"></div>
       </div>
-      <button class="refresh-btn" onclick="loadPendingRides()">↻</button>
+      <div style="display:flex;gap:6px">
+        <button class="refresh-btn" onclick="pullFromRideControl()" title="Pull new bookings from Ride Control" style="background:#2c5282;color:#fff;border:none;padding:4px 10px;border-radius:4px;font-size:.75rem;font-weight:600;cursor:pointer">⇩ Pull</button>
+        <button class="refresh-btn" onclick="loadPendingRides()" title="Refresh list">↻</button>
+      </div>
     </div>
     <div class="rides-list" id="rides-list"></div>
   </div>
@@ -247,6 +250,33 @@ function showTab(tabId, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(tabId).style.display = 'block';
   btn.classList.add('active');
+}
+
+// ─── Dispatch: pull from Ride Control ──────────────────────────────────────
+async function pullFromRideControl() {
+  const btn = event && event.currentTarget;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch(API + '/api/trips/pull-from-rc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ days_ahead: 7 })
+    });
+    const result = await r.json();
+    const lines = [
+      `Fetched: ${result.fetched}`,
+      `New trips created: ${result.created}`,
+      `Skipped (already in system): ${result.skipped_existing}`,
+    ];
+    if (result.skipped_invalid) lines.push(`Skipped (bad data): ${result.skipped_invalid}`);
+    if (result.errors && result.errors.length) lines.push(`Errors: ${result.errors.length}`);
+    alert(lines.join('\n'));
+    await loadPendingRides();
+  } catch (e) {
+    alert('Pull failed: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⇩ Pull'; }
+  }
 }
 
 // ─── Dispatch: pending rides ───────────────────────────────────────────────
